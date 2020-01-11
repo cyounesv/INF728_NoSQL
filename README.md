@@ -8,9 +8,9 @@ N'hesitez pas à en ajouter pour ne pas que l'on fasse 2x la meme chose!
 Editer les fichiers build.sbt et build_and_submit pour y mettre vos variables (comme pour le projet Spark)
 
 Il faut lancer le script suivant:
-./build_and_submit.sh LoadingCVSFiles
+./build_and_submit.sh LoadingCSVFiles
 
-J'ai fais en sorte que le lancement se fasse en arriere plan. Si vous voulez l'avoir en premier plan, il faut retirer la commande nohup de la derniere ligne du script (on aura donc directement le spark_submit)
+J'ai fais en sorte que le lancement se fasse en arriere plan. Si vous voulez l'avoir en premier plan, il faut retirer la commande nohup de la derniere ligne du script (on aura donc directement le spark_submit) et le '&' en fin de ligne.
 
 ## Creation du cluster de test Cassandra:
 Il suffit de faire l'installation de ccm pour avoir un cluster. Cassandra n'est pas necessaire; il sera directement télécharger.
@@ -61,4 +61,8 @@ CREATE TABLE requete1 (
          ... PRIMARY KEY ((jour), pays, langue))
          ... ;
 
+Une fois tout cela en place, sortez de cqlsh et lancer:
 
+./build_and_submit.sh EventMentionETL
+
+Ca va charger les fichiers qui sont dans /tmp et les mettre dans Cassandra.
