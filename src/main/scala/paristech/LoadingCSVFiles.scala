@@ -70,7 +70,7 @@ object LoadingCSVFiles extends App {
     withColumnRenamed("_c1", "hash").
     withColumnRenamed("_c2", "url")
 
-  filesDF.union(spark.read.
+  val filesDF2 = filesDF.union(spark.read.
     option("delimiter", " ").
     option("infer_schema", "true").
     csv("/tmp/masterfilelist-translation.txt").
@@ -78,8 +78,8 @@ object LoadingCSVFiles extends App {
     withColumnRenamed("_c1", "hash").
     withColumnRenamed("_c2", "url")).cache()
     
-  filesDF.show(false)
-  val sampleDF = filesDF.filter(col("url").contains("/20191201")).cache
+  filesDF2.show(false)
+  val sampleDF = filesDF2.filter(col("url").contains("/20191201")).cache
 
   sampleDF.select("url").repartition(100).foreach(r => {
     val URL = r.getAs[String](0)

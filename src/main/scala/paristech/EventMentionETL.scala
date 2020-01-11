@@ -112,7 +112,7 @@ object EventMentionETL extends App {
   // On charge les fichiers Events
   // Code du prof pour faire ca
 
-  val eventsRDD = spark.sparkContext.binaryFiles("/tmp/20191[0-9]*.export.CSV.zip", 100).
+  val eventsRDD = spark.sparkContext.binaryFiles("/tmp/2019*.export.CSV.zip", 100).
     flatMap { // decompresser les fichiers
       case (name: String, content: PortableDataStream) =>
         val zis = new ZipInputStream(content.open)
@@ -157,7 +157,7 @@ object EventMentionETL extends App {
   // On charge les fichiers Mention
   // Code du prof pour faire ca
 
-  val mentionsRDD = spark.sparkContext.binaryFiles("/tmp/20191[0-9]*.mentions.CSV.zip", 100).
+  val mentionsRDD = spark.sparkContext.binaryFiles("/tmp/2019*.mentions.CSV.zip", 100).
     flatMap { // decompresser les fichiers
       case (name: String, content: PortableDataStream) =>
         val zis = new ZipInputStream(content.open)
@@ -169,13 +169,14 @@ object EventMentionETL extends App {
           }
     }
   val mentionsEvents = mentionsRDD.cache // RDD
+ 
 
   // Si je ne trouve pas d'info de translate, j'utilise "Eng"
   val dfMention = mentionsEvents.map(_.split("\t")).filter(_.length >= 14).map(
     e => if (e.length == 14) EventMention(
-      toInt(e(0)), toBigInt(e(1)), toBigInt(e(2)), toInt(e(3)), e(4), e(5), toInt(e(6)), toInt(e(7)), toInt(e(8)), toInt(e(9)), toInt(e(10)), toInt(e(11)), toInt(e(12)), toDouble(e(13)), "srclc:eng")
+      toInt(e(0)), toBigInt(e(1)), toBigInt(e(2)), toInt(e(3)), e(4), e(5), toInt(e(6)), toInt(e(7)), toInt(e(8)), toInt(e(9)), toInt(e(10)), toInt(e(11)), toInt(e(12)), toDouble(e(13)), "eng")
     else EventMention(
-      toInt(e(0)), toBigInt(e(1)), toBigInt(e(2)), toInt(e(3)), e(4), e(5), toInt(e(6)), toInt(e(7)), toInt(e(8)), toInt(e(9)), toInt(e(10)), toInt(e(11)), toInt(e(12)), toDouble(e(13)), e(14))).toDF.cache
+      toInt(e(0)), toBigInt(e(1)), toBigInt(e(2)), toInt(e(3)), e(4), e(5), toInt(e(6)), toInt(e(7)), toInt(e(8)), toInt(e(9)), toInt(e(10)), toInt(e(11)), toInt(e(12)), toDouble(e(13)), e(14).split(';')(0).split(':')(1) )).toDF.cache
 
   // Requette 1
   // il faut faire du casandra mais ca ne marche pas dans mon docker; a revoir dans AWS
@@ -205,14 +206,14 @@ object EventMentionETL extends App {
      USING org.apache.spark.sql.cassandra
      OPTIONS (
      table "requete1",
-     keyspace "NoSQL",
+     keyspace "nosql",
      cluster "test",
      pushdown "true")"""
 spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra Table
 
 
   cassandraToSave.write
-  .cassandraFormat("requete1", "NoSQL", "test")
+  .cassandraFormat("requete1", "nosql", "test")
   .save()
   
   
