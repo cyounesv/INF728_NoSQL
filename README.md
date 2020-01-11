@@ -1,5 +1,8 @@
 # Projet NO-SQL INF728
 
+Pour les taches du projet, j'ai fais un kanboard (https://github.com/Martinez-TAD/INF728_NoSQL/projects/1) avec quelques tâches.
+N'hesitez pas à en ajouter pour ne pas que l'on fasse 2x la meme chose!
+
 
 ## Chargement des données:
 Editer les fichiers build.sbt et build_and_submit pour y mettre vos variables (comme pour le projet Spark)
@@ -32,7 +35,7 @@ ccm status
 Arriver ici, vous devriez avoir:
 
 Cluster: 'test'
----------------
+
 node1: UP
 node2: UP
 node3: UP
@@ -48,6 +51,7 @@ use nosql ;
 
 ### Requete 1:
 A voir si on ne met pas le pays comme partition pour avoir quelquechose de plus présentable
+On ne peut pas trier les resultats sur le count si count n'est pas dans les champs du clustering. A voir, surtout pour la requete 2
 
 CREATE TABLE requete1 (
          ... jour DATE, 
