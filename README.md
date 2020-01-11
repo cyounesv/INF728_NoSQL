@@ -25,12 +25,12 @@ cd ccm && ./setup.py install
 
 Une fois installée, on peut lancer les commandes suivantes pour faire un git. Pour les personnes sur Mac (Nico, je parle de toi :p), regarde la doc, tu as 2 commandes à faire en plus.
 
-ccm create test -v 3.11.5
-ccm list
-ccm populate -n 3
-ccm list
-ccm start
-ccm status
+* ccm create test -v 3.11.5
+* ccm list
+* ccm populate -n 3
+* ccm list
+* ccm start
+* ccm status
 
 Arriver ici, vous devriez avoir:
 
@@ -46,8 +46,8 @@ cqlsh
 
 ### A revoir: un seul keyspace pour les 4 ou 4 keyspace? Strategy? 
 
-CREATE KEYSPACE NoSQL WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
-use nosql ;
+* CREATE KEYSPACE NoSQL WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
+* use nosql ;
 
 ### Requete 1:
 A voir si on ne met pas le pays comme partition pour avoir quelquechose de plus présentable
