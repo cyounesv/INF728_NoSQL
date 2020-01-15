@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # This script needs to be located where the build.sbt file is.
 # It takes as optional parameter the path of the spark directory. If no path is specified
 # it will look for the spark directory in $HOME.
@@ -10,16 +9,9 @@
 #  - $1 : job to execute
 #  - $2 : [optional] path to spark directory
 set -o pipefail
-
-
 echo -e "\n --- building .jar --- \n"
-
 sbt assembly || { echo 'Build failed' ; exit 1; }
-
 echo -e "\n --- spark-submit --- \n"
-
-path_to_spark="/home/martinez/spark-2.4.4-bin-hadoop2.7"
-
+path_to_spark="/mnt/c/Users/rivie/spark-2.4.4-bin-hadoop2.7"
 if [ -n "$2" ]; then path_to_spark=$2; fi
-
 nohup $path_to_spark/bin/spark-submit --packages com.datastax.spark:spark-cassandra-connector_2.11:2.4.2 --conf spark.eventLog.enabled=true --conf spark.eventLog.dir="/tmp/" --driver-memory 4g --class paristech.$1 target/scala-2.11/*.jar >$1.out 2>&1 &

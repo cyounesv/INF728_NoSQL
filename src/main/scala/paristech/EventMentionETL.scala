@@ -3,6 +3,8 @@ import org.apache.spark.input.PortableDataStream
 import java.util.zip.ZipInputStream
 import java.io.BufferedReader
 import java.io.InputStreamReader
+
+import com.datastax.spark.connector.SomeColumns
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.SparkConf
@@ -27,7 +29,9 @@ object EventMentionETL extends App {
     "spark.default.parallelism" -> "12",
     "spark.sql.shuffle.partitions" -> "12",
     "spark.driver.maxResultSize" -> "2g",
-    "spark.master" -> "local[*]"))
+    "spark.master" -> "local[*]",
+    "spark.cassandra.connection.connections_per_executor_max" -> "2"
+  ))
 
   val spark = SparkSession
     .builder
@@ -178,7 +182,7 @@ object EventMentionETL extends App {
     else EventMention(
       toInt(e(0)), toBigInt(e(1)), toBigInt(e(2)), toInt(e(3)), e(4), e(5), toInt(e(6)), toInt(e(7)), toInt(e(8)), toInt(e(9)), toInt(e(10)), toInt(e(11)), toInt(e(12)), toDouble(e(13)), e(14).split(';')(0).split(':')(1) )).toDF.cache
 
-  // Requette 1
+  // Requete 1
   // il faut faire du casandra mais ca ne marche pas dans mon docker; a revoir dans AWS
   // Schema : Date, Pays, Langue
   // Tout le nommage est à revoir
@@ -198,10 +202,10 @@ object EventMentionETL extends App {
   cassandra1.show()
   cassandra2.show()
   
-  val cassandraToSave = cassandra1.withColumnRenamed("SQLDATE","jour").withColumnRenamed("ActionGeo_CountryCode","pays").withColumnRenamed("MentionDocTranslationInfo","langue")
+  /*val cassandraToSave = cassandra1.withColumnRenamed("SQLDATE","jour").withColumnRenamed("ActionGeo_CountryCode","pays").withColumnRenamed("MentionDocTranslationInfo","langue")
   
   spark.setCassandraConf("Test", CassandraConnectorConf.ConnectionHostParam.option("127.0.0.1"))
-  
+
   val createDDL = """CREATE TEMPORARY VIEW words
      USING org.apache.spark.sql.cassandra
      OPTIONS (
@@ -215,6 +219,39 @@ spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra 
   cassandraToSave.write
   .cassandraFormat("requete1", "nosql", "test")
   .save()
-  
-  
+*/
+  // Requete 2
+
+
+  val requete2 = dfEvent.join(dfMention, Seq("GLOBALEVENTID")).select("GLOBALEVENTID", "SQLDATE","ActionGeo_CountryCode","MentionIdentifier","Year","MonthYear").groupBy("Year","MonthYear","SQLDATE", "ActionGeo_CountryCode", "GLOBALEVENTID").count().sort($"count".desc)
+
+
+  val requete2ToSave = requete2.withColumnRenamed("SQLDATE","Day").withColumnRenamed("ActionGeo_CountryCode","Country").withColumnRenamed("GLOBALEVENTID","EventID")
+  requete2ToSave.show()
+
+  spark.setCassandraConf("Test", CassandraConnectorConf.ConnectionHostParam.option("127.0.0.1"))
+
+
+ /* val createDDL = """CREATE TEMPORARY VIEW words
+     USING org.apache.spark.sql.cassandra
+     OPTIONS (
+     table "requete2",
+     keyspace "nosql",
+     cluster "test",
+     pushdown "true")"""
+  spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra Table
+
+  requete2ToSave.write
+    .cassandraFormat("requete2", "nosql", "test")
+    .save()
+*/
+
+
+  requete2ToSave.write
+    .cassandraFormat("requete2", "nosql", "test")
+    .save()
+
+
+  val requete2GroupByMonth =dfEvent.join(dfMention, Seq("GLOBALEVENTID")).select("GLOBALEVENTID", "SQLDATE","ActionGeo_CountryCode","MentionIdentifier","Year","MonthYear").groupBy("MonthYear", "ActionGeo_CountryCode").count().sort($"count".desc)
+  requete2GroupByMonth.show()
 }
