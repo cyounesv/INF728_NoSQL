@@ -7,6 +7,7 @@ import java.io.InputStreamReader
 import com.datastax.spark.connector.SomeColumns
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
+import org.apache.spark.sql.functions._
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 import org.apache.log4j.Level
@@ -191,7 +192,7 @@ object EventMentionETL extends App {
 
   val eventLanguage = dfMention.select("GLOBALEVENTID", "MentionDocTranslationInfo").distinct
 
-  val cassandra1 = dfEvent.join(eventLanguage, Seq("GLOBALEVENTID")).select("SQLDATE", "ActionGeo_CountryCode", "MentionDocTranslationInfo").groupBy("SQLDATE", "ActionGeo_CountryCode", "MentionDocTranslationInfo").count().sort($"count".desc)
+  val cassandra1 = dfEvent.join(eventLanguage, Seq("GLOBALEVENTID")).select("SQLDATE", "ActionGeo_CountryCode", "MentionDocTranslationInfo").groupBy("SQLDATE", "ActionGeo_CountryCode", "MentionDocTranslationInfo").count()
 
   
   // Pour verifier la jointure
@@ -223,10 +224,10 @@ spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra 
   // Requete 2
 
 
-  val requete2 = dfEvent.join(dfMention, Seq("GLOBALEVENTID")).select("GLOBALEVENTID", "SQLDATE","ActionGeo_CountryCode","MentionIdentifier","Year","MonthYear").groupBy("Year","MonthYear","SQLDATE", "ActionGeo_CountryCode", "GLOBALEVENTID").count().sort($"count".desc)
+  val requete2 = dfEvent.join(dfMention, Seq("GLOBALEVENTID")).select("GLOBALEVENTID", "SQLDATE","ActionGeo_CountryCode","MentionIdentifier","Year","MonthYear").groupBy("Year","MonthYear","SQLDATE", "ActionGeo_CountryCode", "GLOBALEVENTID").count().withColumn("ActionGeo_CountryCode", when($"ActionGeo_CountryCode"==="", "unknown").otherwise($"ActionGeo_CountryCode"))
 
 
-  val requete2ToSave = requete2.withColumnRenamed("SQLDATE","Day").withColumnRenamed("ActionGeo_CountryCode","Country").withColumnRenamed("GLOBALEVENTID","EventID")
+  val requete2ToSave = requete2.withColumnRenamed("SQLDATE","day").withColumnRenamed("ActionGeo_CountryCode","country").withColumnRenamed("GLOBALEVENTID","eventid").withColumnRenamed("Year","year").withColumnRenamed("MonthYear","monthyear")  
   requete2ToSave.show()
 
   spark.setCassandraConf("Test", CassandraConnectorConf.ConnectionHostParam.option("127.0.0.1"))
