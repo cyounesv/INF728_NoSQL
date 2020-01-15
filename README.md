@@ -44,12 +44,14 @@ On va ensuite faire la table de la requete 1 dans un nouveau keyspace via cqlsh:
 
 cqlsh
 
-### A revoir: un seul keyspace pour les 4 ou 4 keyspace? Strategy? 
+## A revoir: un seul keyspace pour les 4 ou 4 keyspace? Strategy? 
+
+Un seul keyspace.
 
 * CREATE KEYSPACE NoSQL WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
 * use nosql ;
 
-### Requete 1:
+## Requete 1:
 A voir si on ne met pas le pays comme partition pour avoir quelquechose de plus présentable
 On ne peut pas trier les resultats sur le count si count n'est pas dans les champs du clustering. A voir, surtout pour la requete 2
 
@@ -66,3 +68,25 @@ Une fois tout cela en place, sortez de cqlsh et lancer:
 ./build_and_submit.sh EventMentionETL
 
 Ca va charger les fichiers qui sont dans /tmp et les mettre dans Cassandra.
+
+###Dispo dans le master
+
+## Requete 2
+Plusieurs points à revoir dans la requete 2:
+ - comment faire la somme triée des données par mois et année?
+   => Apres étude avec Thomas, on ne voit pas comment faire. 
+   Il faudrait faire surement 3 requetes: une pour les jours, une pour les mois et une pour l'année
+ - Faire la recherche des evenements lorsque l'on a une mention sur un event du(es)  jour(s) precedents:
+   => L'idée est surement de faire une table intermediaire pour les evenements et taper dedans. Autre idée?
+
+En attendant:
+
+create table requete2(year int, monthYear int, day int, country text, count int, eventid text, PRIMARY KEY((country), eventid, year, monthYear, day, count)) WITH CLUSTERING ORDER BY (eventid asc, year desc, monthYear asc, day asc, count desc);
+
+Permet de faire les requetes avec count par jour en ordre descendant, mois et année (select sum(count) from requete2 where country="FR" group by eventid, year, monthYear ) mais l'ordre de la somme n'est pas pris en compte!
+==> Plusieurs requetes?
+
+### Dispo dans la branche requete2
+
+
+
