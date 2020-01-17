@@ -3,8 +3,8 @@ import org.apache.spark.input.PortableDataStream
 import java.util.zip.ZipInputStream
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import org.apache.spark.sql.functions._
 
+import org.apache.spark.sql.functions._
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 import org.apache.log4j.Level
@@ -12,6 +12,7 @@ import org.apache.log4j.Logger
 import org.apache.spark.sql.cassandra._
 import com.datastax.spark.connector.cql.CassandraConnectorConf
 import com.datastax.spark.connector.rdd.ReadConf
+import org.apache.commons.math3.stat.descriptive.moment.Mean
 import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.functions.explode
 
@@ -114,7 +115,10 @@ object GKG_ETL extends App {
   def getTone(tones: String): Double = {
     tones.split(",")(0).toDouble
   }
-val udfTone = udf(getTone _)
+
+  //def getAverageTone(tones: Double): String = if (mean(tones)<0) "Neg" else "Pos"
+
+  val udfTone = udf(getTone _)
 
 val df31 = dfGkg.select("GKGRECORDID","SourceCommonName", "Date", "V2Themes", "V2Tone")
                       //.groupBy("SourceCommonName", "V2Themes","Date", "V2Tone")
@@ -142,12 +146,23 @@ val cassandra31 = df31.select($"GKGRECORDID", $"SourceCommonName", $"Date", expl
       //.withColumn("Theme_tmp2", split($"Theme_tmp", ","))
       //.withColumn("Theme", udfTheme($"Theme_tmp2"))
 
+
+  // distinct GKGRECORDID / THEME then join this df with other fields on GKGRECORDID?
+
+
   val cassandra311 = cassandra31.select("GKGRECORDID", "SourceCommonName", "Date", "col", "Tone")
-                                .withColumn("Theme", split($"col", ",")(0)).distinct()
+                                .withColumn("Theme", split($"col", ",")(0))
                                 .drop("col", "V2Tones", "V2Themes", "Theme_tmp")
                                 //.withColumn("Theme", udfTheme($"Theme_tmp2"))
 
-  cassandra311.show(30, false)
+  val cassandra312 = cassandra311.select("GKGRECORDID", "SourceCommonName", "Date", "Tone", "Theme").distinct()
+
+  val requete3 = cassandra312.select("GKGRECORDID", "SourceCommonName", "Date", "Tone", "Theme")
+                              .groupBy("GKGRECORDID", "SourceCommonName", "Date", "Theme").agg(mean("Tone"))
+
+
+
+  requete3.show(300, false)
 
   /*val cassandra32 = dfGkgExploded2.select("SourceCommonName", "Date", "V2Persons", "V2Tone")
                         .groupBy("SourceCommonName", "V2Persons")
