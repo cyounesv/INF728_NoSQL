@@ -15,6 +15,7 @@ import org.apache.log4j.Logger
 import org.apache.spark.sql.cassandra._
 import com.datastax.spark.connector.cql.CassandraConnectorConf
 import com.datastax.spark.connector.rdd.ReadConf
+import org.apache.spark.sql.functions.udf
 
 object EventMentionETL extends App {
 
@@ -189,7 +190,7 @@ object EventMentionETL extends App {
   // Tout le nommage est à revoir
   // Je considere qu'on a parser le champ "MentionDocTranslationInfo" de la BDD pour avoir qqchose de propre
   // J'ai pris les colonnes YEAR et MOUNTH pour faire le COUNT dessus pour apres
-
+/*
   val eventLanguage = dfMention.select("GLOBALEVENTID", "MentionDocTranslationInfo").distinct
 
   val cassandra1 = dfEvent.join(eventLanguage, Seq("GLOBALEVENTID")).select("SQLDATE", "ActionGeo_CountryCode", "MentionDocTranslationInfo").groupBy("SQLDATE", "ActionGeo_CountryCode", "MentionDocTranslationInfo").count()
@@ -203,7 +204,7 @@ object EventMentionETL extends App {
   cassandra1.show()
   cassandra2.show()
   
-  /*val cassandraToSave = cassandra1.withColumnRenamed("SQLDATE","jour").withColumnRenamed("ActionGeo_CountryCode","pays").withColumnRenamed("MentionDocTranslationInfo","langue")
+  val cassandraToSave = cassandra1.withColumnRenamed("SQLDATE","jour").withColumnRenamed("ActionGeo_CountryCode","pays").withColumnRenamed("MentionDocTranslationInfo","langue")
   
   spark.setCassandraConf("Test", CassandraConnectorConf.ConnectionHostParam.option("127.0.0.1"))
 
@@ -223,12 +224,40 @@ spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra 
 */
   // Requete 2
 
+  // On collecte les infos de la table mention
+  val date: BigInt => BigInt = BigInt(toString(_).take(8))
+  val dateTimeToDate = udf(date)
 
-  val requete2 = dfEvent.join(dfMention, Seq("GLOBALEVENTID")).select("GLOBALEVENTID", "SQLDATE","ActionGeo_CountryCode","MentionIdentifier","Year","MonthYear").groupBy("Year","MonthYear","SQLDATE", "ActionGeo_CountryCode", "GLOBALEVENTID").count().withColumn("ActionGeo_CountryCode", when($"ActionGeo_CountryCode"==="", "unknown").otherwise($"ActionGeo_CountryCode"))
 
+  dfMention.select("GLOBALEVENTID", "EventTimeDate", "MentionTimeDate")
+    .withColumn("EventDate", dateTimeToDate(col("EventTimeDate")))
+    .withColumn("MentionDate", dateTimeToDate(col("EventTimeDate")))
 
-  val requete2ToSave = requete2.withColumnRenamed("SQLDATE","day").withColumnRenamed("ActionGeo_CountryCode","country").withColumnRenamed("GLOBALEVENTID","eventid").withColumnRenamed("Year","year").withColumnRenamed("MonthYear","monthyear")  
+  // On récupère les mentions dont la date est différente de celle de l'évenement (elles sont déjà dans cassandra)
+  val dfMentionAlreadyInDb = dfMention.filter(col("EventDate") =!= col("MentionDate") )
+  // on récupère les autres à enregistrer
+  val dfMention = dfMention.filter(col("EventDate") === col("MentionDate") )
+
+  val numMentions = dfMention.select("GLOBALEVENTID")
+    .groupBy("GLOBALEVENTID")
+    .count()
+
+  val requete2 = dfEvent.join(numMentions, Seq("GLOBALEVENTID")).select("GLOBALEVENTID", "SQLDATE","ActionGeo_CountryCode","Year","MonthYear", "count")
+    .withColumn("ActionGeo_CountryCode", when($"ActionGeo_CountryCode"==="", "unknown")
+      .otherwise($"ActionGeo_CountryCode")
+    ).sort($"count".desc)
+
+  // event mentionned on several dates : id = 871834248
+
+  val requete2ToSave = requete2.withColumnRenamed("SQLDATE","day")
+    .withColumnRenamed("ActionGeo_CountryCode","country")
+    .withColumnRenamed("GLOBALEVENTID","eventid")
+    .withColumnRenamed("Year","year")
+    .withColumnRenamed("MonthYear","monthyear")
   requete2ToSave.show()
+
+  requete2ToSave.select()
+
 
   spark.setCassandraConf("Test", CassandraConnectorConf.ConnectionHostParam.option("127.0.0.1"))
 
@@ -253,6 +282,14 @@ spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra 
     .save()
 
 
-  val requete2GroupByMonth =dfEvent.join(dfMention, Seq("GLOBALEVENTID")).select("GLOBALEVENTID", "SQLDATE","ActionGeo_CountryCode","MentionIdentifier","Year","MonthYear").groupBy("MonthYear", "ActionGeo_CountryCode").count().sort($"count".desc)
-  requete2GroupByMonth.show()
+  /*TODO : développer le connecteurs pour selectionner et lire une entrée dans cassandra à partir de la date
+   TODO On aura surement un pb avec l'archi actuelle puisque l'on doit selectionné un pays dans la requete
+   TODO Developper la requete d'update pour chaque ligne de dfMentionAlreadyInDb
+   */
+  //spark.cassandraTable("test", "users").select("username").where("eventid").toArray.foreach(println)
+
+  println("end")
+
+  //val requete2GroupByMonth =dfEvent.join(dfMention, Seq("GLOBALEVENTID")).select("GLOBALEVENTID", "SQLDATE","ActionGeo_CountryCode","MentionIdentifier","Year","MonthYear").groupBy("MonthYear", "ActionGeo_CountryCode").count().sort($"count".desc)
+  //requete2GroupByMonth.show()
 }

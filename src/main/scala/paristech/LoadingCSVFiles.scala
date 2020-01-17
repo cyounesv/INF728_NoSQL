@@ -79,7 +79,7 @@ object LoadingCSVFiles extends App {
     withColumnRenamed("_c2", "url")).cache()
     
   filesDF2.show(false)
-  val sampleDF = filesDF2.filter(col("url").contains("/20191201")).cache
+  val sampleDF = filesDF2.filter(col("url").contains("/20190911")).cache
 
   sampleDF.select("url").repartition(100).foreach(r => {
     val URL = r.getAs[String](0)
