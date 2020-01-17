@@ -3,15 +3,20 @@ import org.apache.spark.input.PortableDataStream
 import java.util.zip.ZipInputStream
 import java.io.BufferedReader
 import java.io.InputStreamReader
+
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.apache.spark.sql.cassandra._
 import com.datastax.spark.connector.cql.CassandraConnectorConf
 import com.datastax.spark.connector.rdd.ReadConf
+import org.apache.spark.sql.functions.lit
+import org.apache.spark.sql.functions.explode
+import org.apache.spark.sql.functions._
+
 
 object EventMentionETL extends App {
 
@@ -47,67 +52,67 @@ object EventMentionETL extends App {
 
   // D.E Evenement
   case class Event(
-    GLOBALEVENTID: Int,
-    SQLDATE: Int,
-    MonthYear: Int,
-    Year: Int,
-    FractionDate: Double,
-    Actor1Code: String,
-    Actor1Name: String,
-    Actor1CountryCode: String,
-    Actor1KnownGroupCode: String,
-    Actor1EthnicCode: String,
-    Actor1Religion1Code: String,
-    Actor1Religion2Code: String,
-    Actor1Type1Code: String,
-    Actor1Type2Code: String,
-    Actor1Type3Code: String,
-    Actor2Code: String,
-    Actor2Name: String,
-    Actor2CountryCode: String,
-    Actor2KnownGroupCode: String,
-    Actor2EthnicCode: String,
-    Actor2Religion1Code: String,
-    Actor2Religion2Code: String,
-    Actor2Type1Code: String,
-    Actor2Type2Code: String,
-    Actor2Type3Code: String,
-    IsRootEvent: Int,
-    EventCode: String,
-    EventBaseCode: String,
-    EventRootCode: String,
-    QuadClass: Int,
-    GoldsteinScale: Double,
-    NumMentions: Int,
-    NumSources: Int,
-    NumArticles: Int,
-    AvgTone: Double,
-    Actor1Geo_Type: Int,
-    Actor1Geo_FullName: String,
-    Actor1Geo_CountryCode: String,
-    Actor1Geo_ADM1Code: String,
-    Actor1Geo_ADM2Code: String,
-    Actor1Geo_Lat: Double,
-    Actor1Geo_Long: Double,
-    Actor1Geo_FeatureID: String,
-    Actor2Geo_Type: Int,
-    Actor2Geo_FullName: String,
-    Actor2Geo_CountryCode: String,
-    Actor2Geo_ADM1Code: String,
-    Actor2Geo_ADM2Code: String,
-    Actor2Geo_Lat: Double,
-    Actor2Geo_Long: Double,
-    Actor2Geo_FeatureID: String,
-    ActionGeo_Type: Int,
-    ActionGeo_FullName: String,
-    ActionGeo_CountryCode: String,
-    ActionGeo_ADM1Code: String,
-    ActionGeo_ADM2Code: String,
-    ActionGeo_Lat: Double,
-    ActionGeo_Long: Double,
-    ActionGeo_FeatureID: String,
-    DATEADDED: BigInt,
-    SOURCEURL: String)
+                    GLOBALEVENTID: Int,
+                    SQLDATE: Int,
+                    MonthYear: Int,
+                    Year: Int,
+                    FractionDate: Double,
+                    Actor1Code: String,
+                    Actor1Name: String,
+                    Actor1CountryCode: String,
+                    Actor1KnownGroupCode: String,
+                    Actor1EthnicCode: String,
+                    Actor1Religion1Code: String,
+                    Actor1Religion2Code: String,
+                    Actor1Type1Code: String,
+                    Actor1Type2Code: String,
+                    Actor1Type3Code: String,
+                    Actor2Code: String,
+                    Actor2Name: String,
+                    Actor2CountryCode: String,
+                    Actor2KnownGroupCode: String,
+                    Actor2EthnicCode: String,
+                    Actor2Religion1Code: String,
+                    Actor2Religion2Code: String,
+                    Actor2Type1Code: String,
+                    Actor2Type2Code: String,
+                    Actor2Type3Code: String,
+                    IsRootEvent: Int,
+                    EventCode: String,
+                    EventBaseCode: String,
+                    EventRootCode: String,
+                    QuadClass: Int,
+                    GoldsteinScale: Double,
+                    NumMentions: Int,
+                    NumSources: Int,
+                    NumArticles: Int,
+                    AvgTone: Double,
+                    Actor1Geo_Type: Int,
+                    Actor1Geo_FullName: String,
+                    Actor1Geo_CountryCode: String,
+                    Actor1Geo_ADM1Code: String,
+                    Actor1Geo_ADM2Code: String,
+                    Actor1Geo_Lat: Double,
+                    Actor1Geo_Long: Double,
+                    Actor1Geo_FeatureID: String,
+                    Actor2Geo_Type: Int,
+                    Actor2Geo_FullName: String,
+                    Actor2Geo_CountryCode: String,
+                    Actor2Geo_ADM1Code: String,
+                    Actor2Geo_ADM2Code: String,
+                    Actor2Geo_Lat: Double,
+                    Actor2Geo_Long: Double,
+                    Actor2Geo_FeatureID: String,
+                    ActionGeo_Type: Int,
+                    ActionGeo_FullName: String,
+                    ActionGeo_CountryCode: String,
+                    ActionGeo_ADM1Code: String,
+                    ActionGeo_ADM2Code: String,
+                    ActionGeo_Lat: Double,
+                    ActionGeo_Long: Double,
+                    ActionGeo_FeatureID: String,
+                    DATEADDED: BigInt,
+                    SOURCEURL: String)
 
   // On charge les fichiers Events
   // Code du prof pour faire ca
@@ -136,23 +141,23 @@ object EventMentionETL extends App {
       toDouble(e(41)), e(42), toInt(e(43)), e(44), e(45), e(46), e(47), toDouble(e(48)), toDouble(e(49)), e(50), toInt(e(51)), e(52), e(53), e(54), e(55), toDouble(e(56)), toDouble(e(57)), e(58), toBigInt(e(59)), e(60))).toDF.cache
 
   case class EventMention(
-    GLOBALEVENTID: Int,
-    EventTimeDate: BigInt,
-    MentionTimeDate: BigInt,
-    MentionType: Int,
-    MentionSourceName: String,
-    MentionIdentifier: String,
-    SentenceID: Int,
-    Actor1CharOffset: Int,
-    Actor2CharOffset: Int,
-    ActionCharOffset: Int,
-    InRawText: Int,
-    Confidence: Int,
-    MentionDocLen: Int,
-    MentionDocTone: Double,
-    MentionDocTranslationInfo: String // NULL SI ENG
-  // Extras: String // Non utilise
-  )
+                           GLOBALEVENTID: Int,
+                           EventTimeDate: BigInt,
+                           MentionTimeDate: BigInt,
+                           MentionType: Int,
+                           MentionSourceName: String,
+                           MentionIdentifier: String,
+                           SentenceID: Int,
+                           Actor1CharOffset: Int,
+                           Actor2CharOffset: Int,
+                           ActionCharOffset: Int,
+                           InRawText: Int,
+                           Confidence: Int,
+                           MentionDocLen: Int,
+                           MentionDocTone: Double,
+                           MentionDocTranslationInfo: String // NULL SI ENG
+                           // Extras: String // Non utilise
+                         )
 
   // On charge les fichiers Mention
   // Code du prof pour faire ca
@@ -169,7 +174,7 @@ object EventMentionETL extends App {
           }
     }
   val mentionsEvents = mentionsRDD.cache // RDD
- 
+
 
   // Si je ne trouve pas d'info de translate, j'utilise "Eng"
   val dfMention = mentionsEvents.map(_.split("\t")).filter(_.length >= 14).map(
@@ -189,7 +194,7 @@ object EventMentionETL extends App {
 
   val cassandra1 = dfEvent.join(eventLanguage, Seq("GLOBALEVENTID")).select("SQLDATE", "ActionGeo_CountryCode", "MentionDocTranslationInfo").groupBy("SQLDATE", "ActionGeo_CountryCode", "MentionDocTranslationInfo").count().sort($"count".desc)
 
-  
+
   // Pour verifier la jointure
   val cassandra2 = dfEvent.select("GLOBALEVENTID", "SQLDATE", "ActionGeo_CountryCode", "Year", "MonthYear").groupBy("Year", "MonthYear", "SQLDATE", "ActionGeo_CountryCode").count().sort($"count".desc)
 
@@ -197,11 +202,11 @@ object EventMentionETL extends App {
 
   cassandra1.show()
   cassandra2.show()
-  
+
   val cassandraToSave = cassandra1.withColumnRenamed("SQLDATE","jour").withColumnRenamed("ActionGeo_CountryCode","pays").withColumnRenamed("MentionDocTranslationInfo","langue")
-  
+
   spark.setCassandraConf("Test", CassandraConnectorConf.ConnectionHostParam.option("127.0.0.1"))
-  
+
   val createDDL = """CREATE TEMPORARY VIEW words
      USING org.apache.spark.sql.cassandra
      OPTIONS (
@@ -209,12 +214,128 @@ object EventMentionETL extends App {
      keyspace "nosql",
      cluster "test",
      pushdown "true")"""
-spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra Table
+  spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra Table
 
 
   cassandraToSave.write
-  .cassandraFormat("requete1", "nosql", "test")
-  .save()
-  
-  
+    .cassandraFormat("requete1", "nosql", "test")
+    .mode(SaveMode.Append)
+    .save()
+
+
+  // requete 3
+  case class Gkg(
+                  GKGRECORDID: String,
+                  DATE: BigInt,
+                  SourceCollectionIdentifier: Int,
+                  SourceCommonName: String,
+                  DocumentIdentifier: String,
+                  Counts: String,
+                  V2Counts: String,
+                  Themes: String,
+                  V2Themes: String,
+                  Locations: String,
+                  V2Locations: String,
+                  Persons: String,
+                  V2Persons: String,
+                  Organizations: String,
+                  V2Organizations: String,
+                  V2Tone: String,
+                  Dates: String,
+                  GCAM: String,
+                  SharingImage: String,
+                  RelatedImages: String,
+                  SocialImageEmbeds: String,
+                  SocialVideoEmbeds: String,
+                  Quotations: String,
+                  AllNames: String,
+                  Amounts: String,
+                  TranslationInfo: String,
+                  Extras: String)
+
+  val gkgRDD = spark.sparkContext.binaryFiles("/tmp/2019*.gkg.csv.zip", 100).
+    flatMap { // decompresser les fichiers
+      case (name: String, content: PortableDataStream) =>
+        val zis = new ZipInputStream(content.open)
+        Stream.continually(zis.getNextEntry).
+          takeWhile(_ != null).
+          flatMap { _ =>
+            val br = new BufferedReader(new InputStreamReader(zis))
+            Stream.continually(br.readLine()).takeWhile(_ != null)
+          }
+    }
+
+  val cachedGkg = gkgRDD.cache // RDD
+
+  val dfGkg = cachedGkg.map(_.split("\t")).filter(_.length == 27).map(
+    e => Gkg(
+      e(0), toBigInt(e(1)), toInt(e(2)), e(3), e(4), e(5), e(6), e(7), e(8), e(9), e(10), e(11), e(12), e(13), e(14), e(15), e(16),
+      e(17), e(18), e(19), e(20), e(21), e(22), e(23), e(24), e(25), e(26))).toDF.cache
+
+
+  /* println("tota")
+   dfGkg.show(3)
+   val cassandra31 = dfGkg.select("SourceCommonName").distinct();
+   cassandra31.show()
+   println("tata")*/
+
+  /* val dfGkgExploded1 = dfGkg.select(($"V2Themes").split(","))
+   val dfGkgExploded2 = dfGkg.select($"SourceCommonName", $"Date", explode($"V2Persons"), $"V2Tone")
+   val dfGkgExploded3 = dfGkg.select($"SourceCommonName", $"Date", explode($"V2Locations"), $"V2Tone")*/
+
+  def getTone(tones: String): Double = {
+    tones.split(",")(0).toDouble
+  }
+  val udfTone = udf(getTone _)
+
+  val df31 = dfGkg.select("GKGRECORDID","SourceCommonName", "Date", "V2Themes", "V2Tone")
+    //.groupBy("SourceCommonName", "V2Themes","Date", "V2Tone")
+    .withColumn("Type", lit("Themes"))
+    .withColumn("Themes", split($"V2Themes", ";"))
+    .withColumn("Tone", udfTone($"V2Tone"))
+  //.withColumn("Tone", $"Splitted_tones")
+
+
+  // df31.show(20, false)
+
+  // val test = df31.select("Splitted_tones").map(x => x(0))
+  //test.show(10, false)
+
+  val cassandra31 = df31.select($"GKGRECORDID", $"SourceCommonName", $"Date", explode($"Themes"), $"Tone")
+  cassandra31.show(30, false)
+
+  /*val cassandra32 = dfGkgExploded2.select("SourceCommonName", "Date", "V2Persons", "V2Tone")
+                        .groupBy("SourceCommonName", "V2Persons")
+                        .count().withColumn("Type", lit("Persons"))
+  val cassandra33 = dfGkgExploded3.select("SourceCommonName", "Date", "V2Locations", "V2Tone")
+                          .groupBy("SourceCommonName", "V2Locations")
+                          .count().withColumn("Type", lit("Locations"))
+   */
+  //cassandra31.show()
+  //cassandra31.printSchema()
+  /* cassandra32.show()
+   cassandra33.show()
+ */
+  println("END")
+
+
+  // Requete 4
+  /*Colonnes utiles:
+      + Event------> GLOBALEVENTID. SQLDATE, MonthYear, Year, FractionDate (? pour avoir le jour de l'année), NumArticles, AvgTone, Actor2Geo_Lat, Actor2Geo_Long,  ActionGeo_FullName
+      (+ gkg  ------> GLOBALEVENTID, Tone???)
+*/
+
+  val country1 = dfEvent.select("GLOBALEVENTID", "SQLDATE","MonthYear","Year","ActionGeo_FullName", "NumArticles", "ActionGeo_Lat", "ActionGeo_Long", "AvgTone").withColumnRenamed("SQLDATE","SQLDATE1").withColumnRenamed("Year", "Year1").withColumnRenamed("MonthYear","MonthYear1").withColumnRenamed("ActionGeo_FullName","country1").withColumnRenamed("NumArticles","NumArticles1").withColumnRenamed("ActionGeo_Lat","ActionGeo_Lat1").withColumnRenamed("ActionGeo_Long","ActionGeo_Long1").withColumnRenamed("AvgTone","AvgTone1")
+  val country2 = dfEvent.select("GLOBALEVENTID", "SQLDATE","MonthYear","Year","ActionGeo_FullName", "NumArticles", "ActionGeo_Lat", "ActionGeo_Long", "AvgTone").withColumnRenamed("SQLDATE","SQLDATE2").withColumnRenamed("Year", "Year2").withColumnRenamed("MonthYear","MonthYear2").withColumnRenamed("ActionGeo_FullName","country2").withColumnRenamed("NumArticles","NumArticles2").withColumnRenamed("ActionGeo_Lat","ActionGeo_Lat2").withColumnRenamed("ActionGeo_Long","ActionGeo_Long2").withColumnRenamed("AvgTone","AvgTone2")
+
+  val requete4 = country1.join(country2,Seq("GLOBALEVENTID") ).select("SQLDATE1","SQLDATE2", "Year1","Year2","MonthYear1","MonthYear2","country1", "country2", "NumArticles1", "NumArticles2", "ActionGeo_Lat1", "ActionGeo_Lat2", "ActionGeo_Long1", "ActionGeo_Long2" , "AvgTone1","AvgTone2")
+
+  requete4.show(30, false)
+  //val requete4ToSave = requete4temp.withColumnRenamed("SQLDATE","day").withColumnRenamed("GLOBALEVENTID","eventid")
+
+  // requete4ToSave.write
+  // .cassandraFormat("requete4", "nosql", "test")
+  //.save()
+  println("END requete 4")
+
 }
