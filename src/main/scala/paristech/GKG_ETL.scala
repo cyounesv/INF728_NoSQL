@@ -119,7 +119,7 @@ val udfTone = udf(getTone _)
 val df31 = dfGkg.select("GKGRECORDID","SourceCommonName", "Date", "V2Themes", "V2Tone")
                       //.groupBy("SourceCommonName", "V2Themes","Date", "V2Tone")
                       .withColumn("Type", lit("Themes"))
-                      .withColumn("Themes", split($"V2Themes", ";"))
+                      .withColumn("Theme_tmp", split($"V2Themes", ";"))
                       .withColumn("Tone", udfTone($"V2Tone"))
                      //.withColumn("Tone", $"Splitted_tones")
 
@@ -128,9 +128,26 @@ val df31 = dfGkg.select("GKGRECORDID","SourceCommonName", "Date", "V2Themes", "V
 
  // val test = df31.select("Splitted_tones").map(x => x(0))
   //test.show(10, false)
+  def getTheme(theme: String): String = {
+    theme.split(",")(0)
+  }
+  val udfTheme = udf(getTheme _)
 
-  val cassandra31 = df31.select($"GKGRECORDID", $"SourceCommonName", $"Date", explode($"Themes"), $"Tone")
-  cassandra31.show(30, false)
+  //def getThemefromArray(theme: Array): String = {
+    //
+  //}
+
+val cassandra31 = df31.select($"GKGRECORDID", $"SourceCommonName", $"Date", explode($"Theme_tmp"), $"Tone")
+      //.drop("V2Themes", "V2Tones")
+      //.withColumn("Theme_tmp2", split($"Theme_tmp", ","))
+      //.withColumn("Theme", udfTheme($"Theme_tmp2"))
+
+  val cassandra311 = cassandra31.select("GKGRECORDID", "SourceCommonName", "Date", "col", "Tone")
+                                .withColumn("Theme", split($"col", ",")(0)).distinct()
+                                .drop("col", "V2Tones", "V2Themes", "Theme_tmp")
+                                //.withColumn("Theme", udfTheme($"Theme_tmp2"))
+
+  cassandra311.show(30, false)
 
   /*val cassandra32 = dfGkgExploded2.select("SourceCommonName", "Date", "V2Persons", "V2Tone")
                         .groupBy("SourceCommonName", "V2Persons")
