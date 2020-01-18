@@ -1,5 +1,6 @@
 package paristech
 import sys.process._
+
 import java.net.URL
 import java.io.File
 import java.io.File
@@ -10,6 +11,12 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
+import com.amazonaws.services.s3.AmazonS3Client
+import com.amazonaws.auth.BasicAWSCredentials
+import com.amazonaws.auth.BasicSessionCredentials
+import com.amazonaws.services.s3.AmazonS3Client
+import com.amazonaws.auth.BasicAWSCredentials
+    
 
 object LoadingCSVFiles extends App {
 
@@ -34,7 +41,19 @@ object LoadingCSVFiles extends App {
   spark.sparkContext.setLogLevel("WARN")
 
   import spark.implicits._
+    
+  val AWS_ID = "AKIAQHELBFFBNTZKXAPU"
+  val AWS_KEY = "cnyax70B0VVkJKGNjsAhZY6hNFSdSHAu2NHB+kkW"
 
+  val BUCKET = "projet-nosql"
+  // la classe AmazonS3Client n'est pas serializable
+  // on rajoute l'annotation @transient pour dire a Spark de ne pas essayer de serialiser cette classe et l'envoyer aux executeurs
+  @transient 
+  val awsClient = new AmazonS3Client(new BasicAWSCredentials(AWS_ID, AWS_KEY))
+  spark.sparkContext.hadoopConfiguration.set("fs.s3a.access.key", AWS_ID) // mettre votre ID du fichier credentials.csv
+  spark.sparkContext.hadoopConfiguration.set("fs.s3a.secret.key", AWS_KEY) // mettre votre secret du fichier credentials.csv
+    
+  
   println("On demarre le chargement")
 
   def fileDownloader(urlOfFileToDownload: String, fileName: String) = {
@@ -53,15 +72,12 @@ object LoadingCSVFiles extends App {
     }
   }
 
-  
-  
   // Chargement du fichier "master"
   fileDownloader("http://data.gdeltproject.org/gdeltv2/masterfilelist.txt", "/tmp/masterfilelist.txt") // save the list file to the Spark Master
 
   // Chargement du fichier "master translation"
   fileDownloader("http://data.gdeltproject.org/gdeltv2/masterfilelist-translation.txt", "/tmp/masterfilelist-translation.txt") // save the list file to the Spark Master
 
-  
   val filesDF = spark.read.
     option("delimiter", " ").
     option("infer_schema", "true").
@@ -77,19 +93,22 @@ object LoadingCSVFiles extends App {
     withColumnRenamed("_c0", "size").
     withColumnRenamed("_c1", "hash").
     withColumnRenamed("_c2", "url")).cache()
-    
-  filesDF2.show(false)
-  val sampleDF = filesDF2.filter(col("url").contains("/20191201")).cache
 
+  filesDF2.show(false)
+  val sampleDF = filesDF2.filter(col("url").contains("/2019")).cache
+
+  object AwsS3Client{
+    val s3 = new AmazonS3Client(new BasicAWSCredentials(AWS_ID, AWS_KEY))
+}
   sampleDF.select("url").repartition(100).foreach(r => {
     val URL = r.getAs[String](0)
     val fileName = r.getAs[String](0).split("/").last
     val dir = "/tmp/"
     val localFileName = dir + fileName
     fileDownloader(URL, localFileName)
-    //val localFile = new File(localFileName)
-    //AwsClient.s3.putObject("john-doe-telecom-gdelt2018", fileName, localFile )
-    //localFile.delete()
+    val localFile = new File(localFileName)
+    AwsS3Client.s3.putObject(BUCKET, fileName, localFile )
+    localFile.delete()
 
   })
 
