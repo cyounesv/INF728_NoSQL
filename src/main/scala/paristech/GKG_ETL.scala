@@ -89,8 +89,6 @@ object GKG_ETL extends App {
 
   val cachedGkg = gkgRDD.cache // RDD
 
-  def toDouble(s: String): Double = if (s.isEmpty) 0 else s.toDouble
-
   def toInt(s: String): Int = if (s.isEmpty) 0 else s.toInt
 
   def toBigInt(s: String): BigInt = if (s.isEmpty) BigInt(0) else BigInt(s)
@@ -103,20 +101,12 @@ object GKG_ETL extends App {
 
 
  /* println("tota")
-  dfGkg.show(3)
-  val cassandra31 = dfGkg.select("SourceCommonName").distinct();
-  cassandra31.show()
-  println("tata")*/
 
- /* val dfGkgExploded1 = dfGkg.select(($"V2Themes").split(","))
-  val dfGkgExploded2 = dfGkg.select($"SourceCommonName", $"Date", explode($"V2Persons"), $"V2Tone")
-  val dfGkgExploded3 = dfGkg.select($"SourceCommonName", $"Date", explode($"V2Locations"), $"V2Tone")*/
+  println("tata")*/
 
   def getTone(tones: String): Double = {
     tones.split(",")(0).toDouble
   }
-
-  //def getAverageTone(tones: Double): String = if (mean(tones)<0) "Neg" else "Pos"
 
   val udfTone = udf(getTone _)
 
@@ -137,18 +127,11 @@ val df31 = dfGkg.select("GKGRECORDID","SourceCommonName", "Date", "V2Themes", "V
   }
   val udfTheme = udf(getTheme _)
 
-  //def getThemefromArray(theme: Array): String = {
-    //
-  //}
-
 val cassandra31 = df31.select($"GKGRECORDID", $"SourceCommonName", $"Date", explode($"Theme_tmp"), $"Tone")
-      //.drop("V2Themes", "V2Tones")
-      //.withColumn("Theme_tmp2", split($"Theme_tmp", ","))
-      //.withColumn("Theme", udfTheme($"Theme_tmp2"))
 
+  def getAverageTone(tones: Double): String = if (tones<0) "Neg" else "Pos"
 
-  // distinct GKGRECORDID / THEME then join this df with other fields on GKGRECORDID?
-
+  val udfAvTone = udf(getAverageTone _)
 
   val cassandra311 = cassandra31.select("GKGRECORDID", "SourceCommonName", "Date", "col", "Tone")
                                 .withColumn("Theme", split($"col", ",")(0))
@@ -158,11 +141,10 @@ val cassandra31 = df31.select($"GKGRECORDID", $"SourceCommonName", $"Date", expl
   val cassandra312 = cassandra311.select("GKGRECORDID", "SourceCommonName", "Date", "Tone", "Theme").distinct()
 
   val requete3 = cassandra312.select("GKGRECORDID", "SourceCommonName", "Date", "Tone", "Theme")
-                              .groupBy("GKGRECORDID", "SourceCommonName", "Date", "Theme").agg(mean("Tone"))
+                              .groupBy("GKGRECORDID", "SourceCommonName", "Date", "Theme").agg(mean("Tone")).withColumn("AverageTone", udfAvTone($"avg(Tone)"))
 
 
-
-  requete3.show(300, false)
+  requete3.show(30, false)
 
   /*val cassandra32 = dfGkgExploded2.select("SourceCommonName", "Date", "V2Persons", "V2Tone")
                         .groupBy("SourceCommonName", "V2Persons")
