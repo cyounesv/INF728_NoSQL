@@ -1,0 +1,93 @@
+---
+- hosts: localhost
+  vars:
+    path_pem: ~/gdeltKeyPair.pem
+    docker_path: "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+  remote_user: root
+  tasks: 
+    - name: Create EC2 Instance
+      command: | 
+       aws2 ec2 run-instances 
+       --region us-east-1
+       --image-id ami-04b9e92b5572fa0d1 
+       --instance-type t2.micro 
+       --key-name gdeltKeyPair 
+       --count 2
+       --security-group-ids sg-0868597c1c17eddf2
+      register: output_create
+
+    - name: Retrieve instance information
+      set_fact:
+        ec2_start_info: "{{ output_create.stdout | from_json }}"
+        
+    # - debug:
+    #     msg: "{{ ec2_start_info.Instances[0] }}"
+
+    - name: Wait for Instance to be ready
+      command: aws2 ec2 wait instance-status-ok --region us-east-1 --instance-ids "{{item.InstanceId}}"
+      loop: "{{ ec2_start_info.Instances }}"
+
+    - name: Get DNSAdress
+      command: aws2 ec2 describe-instances --region us-east-1 --filter "Name=instance-state-name,Values=running"
+      register: output_dns
+    
+    - set_fact:
+        output_json: "{{ output_dns.stdout | from_json }}"
+    
+    - set_fact:
+        ec2_instances: "{{output_json.Reservations[0].Instances}}"
+    
+    # - debug:
+    #     msg: Première DNS adress {{ ec2_instances[0].PublicDnsName}}
+    
+    - name: apt update
+      command: |
+        ssh -i "{{ path_pem }}" ubuntu@"{{item.PublicDnsName}}" 
+        sudo apt-get -y update
+      loop: "{{ ec2_instances }}"
+    
+
+    - name: Docker pre-instalation
+      command: |
+        ssh -i "{{ path_pem }}" ubuntu@"{{item.PublicDnsName}}" 
+        sudo apt install --yes docker.io;
+        sudo apt install --yes docker;
+        sudo systemctl unmask docker.service;
+        sudo systemctl unmask docker.socket;
+        sudo systemctl start docker.service;	
+        sudo usermod -a -G docker ubuntu	
+      loop: "{{ ec2_instances }}"
+
+#   - name: add-apt-repository
+#     c	ommand: |
+#       ssh -i "{{ path_pem }}" ubuntu@"{{item.PublicDnsName}}" 
+#       'sudo add-apt-repository "{{docker_path}}"'
+#     loop: "{{ ec2_instances }}"  
+
+#    - name: apt update
+#      command: |
+#        ssh -i "{{ path_pem }}" ubuntu@"{{item.PublicDnsName}}" 
+#        sudo apt-get -y update
+#      loop: "{{ ec2_instances }}"
+
+#   - name: docker install
+#      command: |
+#        ssh -i "{{ path_pem }}" ubuntu@"{{item.PublicDnsName}}" 
+#        sudo apt-get -y install docker-ce docker-ce-cli containerd.io
+#      loop: "{{ ec2_instances }}"
+
+#    - name: docker start
+#      command: |
+#        ssh -i "{{ path_pem }}" ubuntu@"{{item.PublicDnsName}}"
+#        sudo service docker start
+#      loop: "{{ ec2_instances }}"
+    
+
+    - name: docker run cassandra
+      command: |
+        ssh -i "{{ path_pem }}" ubuntu@"{{item.PublicDnsName}}"
+        sudo docker run hello-world
+      loop: "{{ ec2_instances }}"
+
+      
+    # - name:

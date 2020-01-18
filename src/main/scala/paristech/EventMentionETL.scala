@@ -12,6 +12,11 @@ import org.apache.log4j.Logger
 import org.apache.spark.sql.cassandra._
 import com.datastax.spark.connector.cql.CassandraConnectorConf
 import com.datastax.spark.connector.rdd.ReadConf
+import org.apache.spark.sql.SaveMode
+import java.util.Calendar
+import java.util.GregorianCalendar
+import scala.collection.mutable.ListBuffer
+import java.text.SimpleDateFormat
 
 object EventMentionETL extends App {
 
@@ -109,10 +114,39 @@ object EventMentionETL extends App {
     DATEADDED: BigInt,
     SOURCEURL: String)
 
+  @transient
+  val loadingCSV = new LoadingCSVFiles(spark)
+
+  def alldaysIn2019(): List[String] = {
+
+    val dateFmt = "yyyyMMdd"
+    val iYear = 2019
+    val sdf = new SimpleDateFormat(dateFmt)
+    var dates = new ListBuffer[String]()
+
+    for (month <- Calendar.JANUARY to Calendar.DECEMBER) {
+      // Create a calendar object and set year and month
+
+      val mycal = new GregorianCalendar(iYear, month, 1);
+      val daysInMonth = mycal.getActualMaximum(Calendar.DAY_OF_MONTH); // 28
+
+      for (days <- 1 to daysInMonth) {
+        val mycal = new GregorianCalendar(iYear, month, days);
+        dates += sdf.format(mycal.getTime)
+      }
+    }
+
+    return dates.toList
+  }
+
+  println(alldaysIn2019())
+  
+  val dayOne = loadingCSV.loadEventOneDay("20190101")
+
   // On charge les fichiers Events
   // Code du prof pour faire ca
 
-  val eventsRDD = spark.sparkContext.binaryFiles("/tmp/2019*.export.CSV.zip", 100).
+  val eventsRDD = spark.sparkContext.binaryFiles(dayOne + "/*.export.CSV.zip", 100).
     flatMap { // decompresser les fichiers
       case (name: String, content: PortableDataStream) =>
         val zis = new ZipInputStream(content.open)
@@ -157,7 +191,7 @@ object EventMentionETL extends App {
   // On charge les fichiers Mention
   // Code du prof pour faire ca
 
-  val mentionsRDD = spark.sparkContext.binaryFiles("/tmp/2019*.mentions.CSV.zip", 100).
+  val mentionsRDD = spark.sparkContext.binaryFiles(dayOne + "/*.mentions.CSV.zip", 100).
     flatMap { // decompresser les fichiers
       case (name: String, content: PortableDataStream) =>
         val zis = new ZipInputStream(content.open)
@@ -169,14 +203,13 @@ object EventMentionETL extends App {
           }
     }
   val mentionsEvents = mentionsRDD.cache // RDD
- 
 
   // Si je ne trouve pas d'info de translate, j'utilise "Eng"
   val dfMention = mentionsEvents.map(_.split("\t")).filter(_.length >= 14).map(
     e => if (e.length == 14) EventMention(
       toInt(e(0)), toBigInt(e(1)), toBigInt(e(2)), toInt(e(3)), e(4), e(5), toInt(e(6)), toInt(e(7)), toInt(e(8)), toInt(e(9)), toInt(e(10)), toInt(e(11)), toInt(e(12)), toDouble(e(13)), "eng")
     else EventMention(
-      toInt(e(0)), toBigInt(e(1)), toBigInt(e(2)), toInt(e(3)), e(4), e(5), toInt(e(6)), toInt(e(7)), toInt(e(8)), toInt(e(9)), toInt(e(10)), toInt(e(11)), toInt(e(12)), toDouble(e(13)), e(14).split(';')(0).split(':')(1) )).toDF.cache
+      toInt(e(0)), toBigInt(e(1)), toBigInt(e(2)), toInt(e(3)), e(4), e(5), toInt(e(6)), toInt(e(7)), toInt(e(8)), toInt(e(9)), toInt(e(10)), toInt(e(11)), toInt(e(12)), toDouble(e(13)), e(14).split(';')(0).split(':')(1))).toDF.cache
 
   // Requette 1
   // il faut faire du casandra mais ca ne marche pas dans mon docker; a revoir dans AWS
@@ -189,7 +222,6 @@ object EventMentionETL extends App {
 
   val cassandra1 = dfEvent.join(eventLanguage, Seq("GLOBALEVENTID")).select("SQLDATE", "ActionGeo_CountryCode", "MentionDocTranslationInfo").groupBy("SQLDATE", "ActionGeo_CountryCode", "MentionDocTranslationInfo").count().sort($"count".desc)
 
-  
   // Pour verifier la jointure
   val cassandra2 = dfEvent.select("GLOBALEVENTID", "SQLDATE", "ActionGeo_CountryCode", "Year", "MonthYear").groupBy("Year", "MonthYear", "SQLDATE", "ActionGeo_CountryCode").count().sort($"count".desc)
 
@@ -197,11 +229,11 @@ object EventMentionETL extends App {
 
   cassandra1.show()
   cassandra2.show()
-  
-  val cassandraToSave = cassandra1.withColumnRenamed("SQLDATE","jour").withColumnRenamed("ActionGeo_CountryCode","pays").withColumnRenamed("MentionDocTranslationInfo","langue")
-  
+
+  val cassandraToSave = cassandra1.withColumnRenamed("SQLDATE", "jour").withColumnRenamed("ActionGeo_CountryCode", "pays").withColumnRenamed("MentionDocTranslationInfo", "langue")
+
   spark.setCassandraConf("Test", CassandraConnectorConf.ConnectionHostParam.option("127.0.0.1"))
-  
+
   val createDDL = """CREATE TEMPORARY VIEW words
      USING org.apache.spark.sql.cassandra
      OPTIONS (
@@ -209,12 +241,11 @@ object EventMentionETL extends App {
      keyspace "nosql",
      cluster "test",
      pushdown "true")"""
-spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra Table
-
+  spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra Table
 
   cassandraToSave.write
-  .cassandraFormat("requete1", "nosql", "test")
-  .save()
-  
-  
+    .mode(SaveMode.Append)
+    .cassandraFormat("requete1", "nosql", "test")
+    .save()
+
 }

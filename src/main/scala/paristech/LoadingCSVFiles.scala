@@ -1,43 +1,19 @@
 package paristech
-import sys.process._
-import java.net.URL
 import java.io.File
-import java.io.File
-import java.nio.file.{ Files, StandardCopyOption }
 import java.net.HttpURLConnection
-import org.apache.spark.sql.functions._
+import java.net.URL
+import scala.reflect.io.Directory
+import java.io.File
+
+import scala.sys.process._
+
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
-import org.apache.log4j.Level
-import org.apache.log4j.Logger
+import org.apache.spark.sql.functions._
 
-object LoadingCSVFiles extends App {
+class LoadingCSVFiles(spark: SparkSession) extends Serializable {
 
-  val conf = new SparkConf().setAll(Map(
-    "spark.scheduler.mode" -> "FIFO",
-    "spark.speculation" -> "false",
-    "spark.reducer.maxSizeInFlight" -> "48m",
-    "spark.serializer" -> "org.apache.spark.serializer.KryoSerializer",
-    "spark.kryoserializer.buffer.max" -> "1g",
-    "spark.shuffle.file.buffer" -> "32k",
-    "spark.default.parallelism" -> "12",
-    "spark.sql.shuffle.partitions" -> "12",
-    "spark.driver.maxResultSize" -> "2g",
-    "spark.master" -> "local[*]"))
-
-  val spark = SparkSession
-    .builder
-    .config(conf)
-    .appName("TP Spark : Trainer")
-    .getOrCreate()
-
-  spark.sparkContext.setLogLevel("WARN")
-
-  import spark.implicits._
-
-  println("On demarre le chargement")
-
-  def fileDownloader(urlOfFileToDownload: String, fileName: String) = {
+  private def fileDownloader(urlOfFileToDownload: String, fileName: String) = {
     print("Loading " + fileName + " ...")
     val url = new URL(urlOfFileToDownload)
     val connection = url.openConnection().asInstanceOf[HttpURLConnection]
@@ -53,16 +29,17 @@ object LoadingCSVFiles extends App {
     }
   }
 
-  
-  
-  // Chargement du fichier "master"
-  fileDownloader("http://data.gdeltproject.org/gdeltv2/masterfilelist.txt", "/tmp/masterfilelist.txt") // save the list file to the Spark Master
+  // Test de l'existance des fichiers masters
 
-  // Chargement du fichier "master translation"
-  fileDownloader("http://data.gdeltproject.org/gdeltv2/masterfilelist-translation.txt", "/tmp/masterfilelist-translation.txt") // save the list file to the Spark Master
+  if (!new File("/tmp/masterfilelist.txt").exists) {
 
-  
-  val filesDF = spark.read.
+    // Chargement du fichier "master"
+    fileDownloader("http://data.gdeltproject.org/gdeltv2/masterfilelist.txt", "/tmp/masterfilelist.txt") // save the list file to the Spark Master
+    // Chargement du fichier "master translation"
+    fileDownloader("http://data.gdeltproject.org/gdeltv2/masterfilelist-translation.txt", "/tmp/masterfilelist-translation.txt") // save the list file to the Spark Master
+  }
+
+  private val filesDF = spark.read.
     option("delimiter", " ").
     option("infer_schema", "true").
     csv("/tmp/masterfilelist.txt").
@@ -70,28 +47,64 @@ object LoadingCSVFiles extends App {
     withColumnRenamed("_c1", "hash").
     withColumnRenamed("_c2", "url")
 
-  val filesDF2 = filesDF.union(spark.read.
+  private val filesDF2 = filesDF.union(spark.read.
     option("delimiter", " ").
     option("infer_schema", "true").
     csv("/tmp/masterfilelist-translation.txt").
     withColumnRenamed("_c0", "size").
     withColumnRenamed("_c1", "hash").
     withColumnRenamed("_c2", "url")).cache()
-    
-  filesDF2.show(false)
-  val sampleDF = filesDF2.filter(col("url").contains("/20191201")).cache
 
-  sampleDF.select("url").repartition(100).foreach(r => {
-    val URL = r.getAs[String](0)
-    val fileName = r.getAs[String](0).split("/").last
-    val dir = "/tmp/"
-    val localFileName = dir + fileName
-    fileDownloader(URL, localFileName)
-    //val localFile = new File(localFileName)
-    //AwsClient.s3.putObject("john-doe-telecom-gdelt2018", fileName, localFile )
-    //localFile.delete()
+  def deleteEventOneDay(day: String) = {
+    val directory = new Directory(new File("/tmp/" + day))
+    directory.files.foreach(f => {
+      if (f.name.endsWith("export.CSV.zip") || f.name.endsWith(("mentions.CSV.zip")))
+        f.delete()
+    })
+  }
 
-  })
+  def deleteOneDay(day: String) = {
+    val directory = new Directory(new File("/tmp/" + day))
+    directory.deleteRecursively()
+  }
 
-  println("Loading ends")
+  def loadEventOneDay(day: String, overwrite: Boolean = false): String = {
+    val filters = List("export", "mentions");
+    loadOneDay(filters, day, overwrite)
+  }
+
+  private def loadOneDay(filters: List[String], day: String, overwrite: Boolean = false): String = {
+
+    val sampleDF = filesDF2.filter(col("url").contains("/" + day))
+    val toReturn = "/tmp/" + day;
+
+    val directory = new Directory(new File("/tmp/" + day))
+    if (directory.exists) {
+      if (overwrite) {
+        deleteOneDay(day)
+        directory.createDirectory(false, true)
+      } else {
+        return toReturn
+      }
+    } else {
+      directory.createDirectory(false, true)
+
+    }
+
+    sampleDF.select("url").repartition(100).foreach(r => {
+      val URL = r.getAs[String](0)
+      val fileName = r.getAs[String](0).split("/").last
+      var ok = false
+
+      filters.foreach(f => ok |= fileName.contains(f))
+
+      if (ok) {
+        val dir = "/tmp/" + day + "/"
+        val localFileName = dir + fileName
+        fileDownloader(URL, localFileName)
+      }
+    })
+
+    return toReturn
+  }
 }
