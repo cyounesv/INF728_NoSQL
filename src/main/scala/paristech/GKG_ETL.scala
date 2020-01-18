@@ -104,13 +104,30 @@ object GKG_ETL extends App {
 
   println("tata")*/
 
+  /*********** UDF **************/
+
   def getTone(tones: String): Double = {
     tones.split(",")(0).toDouble
   }
 
   val udfTone = udf(getTone _)
 
-val df31 = dfGkg.select("GKGRECORDID","SourceCommonName", "Date", "V2Themes", "V2Tone")
+  /************************/
+
+  def getAverageTone(tones: Double): String = if (tones<0) "Neg" else "Pos"
+
+  val udfAvTone = udf(getAverageTone _)
+
+  /************************/
+
+  def getTheme(theme: String): String = {
+    theme.split(",")(0)
+  }
+  val udfTheme = udf(getTheme _)
+
+
+ /********* Dataframes to get Themes of articles with Date and Tone **********/
+  val df31 = dfGkg.select("GKGRECORDID","SourceCommonName", "Date", "V2Themes", "V2Tone")
                       //.groupBy("SourceCommonName", "V2Themes","Date", "V2Tone")
                       .withColumn("Type", lit("Themes"))
                       .withColumn("Theme_tmp", split($"V2Themes", ";"))
@@ -122,16 +139,10 @@ val df31 = dfGkg.select("GKGRECORDID","SourceCommonName", "Date", "V2Themes", "V
 
  // val test = df31.select("Splitted_tones").map(x => x(0))
   //test.show(10, false)
-  def getTheme(theme: String): String = {
-    theme.split(",")(0)
-  }
-  val udfTheme = udf(getTheme _)
 
-val cassandra31 = df31.select($"GKGRECORDID", $"SourceCommonName", $"Date", explode($"Theme_tmp"), $"Tone")
+  val cassandra31 = df31.select($"GKGRECORDID", $"SourceCommonName", $"Date", explode($"Theme_tmp"), $"Tone")
 
-  def getAverageTone(tones: Double): String = if (tones<0) "Neg" else "Pos"
 
-  val udfAvTone = udf(getAverageTone _)
 
   val cassandra311 = cassandra31.select("GKGRECORDID", "SourceCommonName", "Date", "col", "Tone")
                                 .withColumn("Theme", split($"col", ",")(0))
@@ -140,20 +151,54 @@ val cassandra31 = df31.select($"GKGRECORDID", $"SourceCommonName", $"Date", expl
 
   val cassandra312 = cassandra311.select("GKGRECORDID", "SourceCommonName", "Date", "Tone", "Theme").distinct()
 
-  val requete3 = cassandra312.select("GKGRECORDID", "SourceCommonName", "Date", "Tone", "Theme")
+  /*********** Requete 3 for Themes ************/
+  val requete31 = cassandra312.select("GKGRECORDID", "SourceCommonName", "Date", "Tone", "Theme")
                               .groupBy("GKGRECORDID", "SourceCommonName", "Date", "Theme").agg(mean("Tone")).withColumn("AverageTone", udfAvTone($"avg(Tone)"))
 
 
-  requete3.show(30, false)
+  requete31.show(30, false)
 
-  /*val cassandra32 = dfGkgExploded2.select("SourceCommonName", "Date", "V2Persons", "V2Tone")
-                        .groupBy("SourceCommonName", "V2Persons")
-                        .count().withColumn("Type", lit("Persons"))
+  /************* Dataframes to get Persons from articles with Date and Tone *************/
 
-  val cassandra33 = dfGkgExploded3.select("SourceCommonName", "Date", "V2Locations", "V2Tone")
-                          .groupBy("SourceCommonName", "V2Locations")
-                          .count().withColumn("Type", lit("Locations"))
-   */
+  val df32 = dfGkg.select("GKGRECORDID","SourceCommonName", "Date", "V2Persons", "V2Tone")
+                    .withColumn("Type", lit("Persons"))
+                    .withColumn("Persons_tmp", split($"V2Persons", ";"))
+                    .withColumn("Tone", udfTone($"V2Tone"))
+
+  val cassandra32 = df32.select($"GKGRECORDID", $"SourceCommonName", $"Date", explode($"Persons_tmp"), $"Tone")
+
+  val cassandra321 = cassandra32.select("GKGRECORDID", "SourceCommonName", "Date", "col", "Tone")
+                    .withColumn("Person", split($"col", ",")(0))
+                    .drop("col", "V2Tones", "V2Persons", "Persons_tmp")
+
+  val cassandra322 = cassandra321.select("GKGRECORDID", "SourceCommonName", "Date", "Tone", "Person").distinct()
+
+  /*********** Requete 3 for Themes ************/
+  val requete32 = cassandra322.select("GKGRECORDID", "SourceCommonName", "Date", "Tone", "Person")
+                              .groupBy("GKGRECORDID", "SourceCommonName", "Date", "Person").agg(mean("Tone")).withColumn("AverageTone", udfAvTone($"avg(Tone)"))
+
+  requete32.show(30, false)
+
+  /************* Dataframes to get Locations from articles with Date and Tone *************/
+
+  val df33 = dfGkg.select("GKGRECORDID","SourceCommonName", "Date", "V2Locations", "V2Tone")
+    .withColumn("Type", lit("Locations"))
+    .withColumn("Locations_tmp", split($"V2Locations", ";"))
+    .withColumn("Tone", udfTone($"V2Tone"))
+
+  val cassandra33 = df33.select($"GKGRECORDID", $"SourceCommonName", $"Date", explode($"Locations_tmp"), $"Tone")
+
+  val cassandra331 = cassandra33.select("GKGRECORDID", "SourceCommonName", "Date", "col", "Tone")
+    .withColumn("Location", split($"col", "#")(0))
+    .drop("col", "V2Tones", "V2Locations", "Locations_tmp")
+
+  val cassandra332 = cassandra331.select("GKGRECORDID", "SourceCommonName", "Date", "Tone", "Location").distinct()
+
+  /*********** Requete 3 for Themes ************/
+  val requete33 = cassandra332.select("GKGRECORDID", "SourceCommonName", "Date", "Tone", "Location")
+    .groupBy("GKGRECORDID", "SourceCommonName", "Date", "Location").agg(mean("Tone")).withColumn("AverageTone", udfAvTone($"avg(Tone)"))
+
+  requete33.show(30, false)
   //cassandra31.show()
 //cassandra31.printSchema()
  /* cassandra32.show()
