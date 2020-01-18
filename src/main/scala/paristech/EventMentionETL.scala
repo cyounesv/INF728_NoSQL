@@ -13,9 +13,12 @@ import org.apache.spark.sql.SparkSession
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.apache.spark.sql.cassandra._
-import com.datastax.spark.connector.cql.CassandraConnectorConf
+import com.datastax.spark.connector.cql.{CassandraConnector, CassandraConnectorConf}
 import com.datastax.spark.connector.rdd.ReadConf
 import org.apache.spark.sql.functions.udf
+import com.datastax.spark.connector._
+
+
 
 object EventMentionETL extends App {
 
@@ -225,20 +228,30 @@ spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra 
   // Requete 2
 
   // On collecte les infos de la table mention
-  val date: BigInt => BigInt = BigInt(toString(_).take(8))
-  val dateTimeToDate = udf(date)
+  //val date: BigInt => BigInt = BigInt(toString(_).take(8))
+  //val dateTimeToDate = udf(date)
 
+//  print(dfMention.schema.fields.map(f => f.dataType))
 
-  dfMention.select("GLOBALEVENTID", "EventTimeDate", "MentionTimeDate")
+ // val dateTimeToDate = udf{ s: BigInt => BigInt((s.toString).take(8)) }
+  dfMention.printSchema()
+  def toDate(date: java.math.BigDecimal) ={
+     BigDecimal(date.toString().take(8))
+  }
+  val dateTimeToDate = udf(toDate _)
+
+  val dfMentionUpdated = dfMention.select("GLOBALEVENTID", "EventTimeDate", "MentionTimeDate")
     .withColumn("EventDate", dateTimeToDate(col("EventTimeDate")))
     .withColumn("MentionDate", dateTimeToDate(col("EventTimeDate")))
 
   // On récupère les mentions dont la date est différente de celle de l'évenement (elles sont déjà dans cassandra)
-  val dfMentionAlreadyInDb = dfMention.filter(col("EventDate") =!= col("MentionDate") )
+  val dfMentionAlreadyInDb = dfMentionUpdated.filter(col("EventDate") =!= col("MentionDate") )
   // on récupère les autres à enregistrer
-  val dfMention = dfMention.filter(col("EventDate") === col("MentionDate") )
+  //val dfMentionFiltered = dfMention.filter(col("EventDate") === col("MentionDate") )
 
-  val numMentions = dfMention.select("GLOBALEVENTID")
+  val numMentions = dfMentionUpdated
+    .filter(col("EventDate") === col("MentionDate") )
+    .select("GLOBALEVENTID")
     .groupBy("GLOBALEVENTID")
     .count()
 
@@ -256,7 +269,7 @@ spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra 
     .withColumnRenamed("MonthYear","monthyear")
   requete2ToSave.show()
 
-  requete2ToSave.select()
+  val request2Mapping = requete2ToSave.select("eventid", "country")
 
 
   spark.setCassandraConf("Test", CassandraConnectorConf.ConnectionHostParam.option("127.0.0.1"))
@@ -281,12 +294,33 @@ spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra 
     .cassandraFormat("requete2", "nosql", "test")
     .save()
 
+  request2Mapping.write
+    .cassandraFormat("requete2mapping", "nosql", "test")
+    .save()
 
-  /*TODO : développer le connecteurs pour selectionner et lire une entrée dans cassandra à partir de la date
-   TODO On aura surement un pb avec l'archi actuelle puisque l'on doit selectionné un pays dans la requete
-   TODO Developper la requete d'update pour chaque ligne de dfMentionAlreadyInDb
-   */
-  //spark.cassandraTable("test", "users").select("username").where("eventid").toArray.foreach(println)
+  /*
+   TODO udf pour aller chercher le pays associé a l'event id
+   TODO envoyer les données sur la db
+
+
+  def getCountry(: java.math.BigDecimal) ={
+    BigDecimal(date.toString().take(8))
+  }
+  val getCountryCol = udf(getCountry(String eventId))
+
+  dfMentionAlreadyInDb
+
+  val test1 = spark.sparkContext.cassandraTable("nosql", "requete2mapping")
+    .select("country")
+    .where("eventid= '890199722'")
+
+  println(test1.first().getString("country"))
+  */
+
+  //val connector = CassandraConnector(spark.sparkContext.getConf)
+  //  spark.sparkContext.cassandraTable("nosql", "request2Mapping").select("country").where("eventid== ").toArray.foreach(println)
+
+
 
   println("end")
 
