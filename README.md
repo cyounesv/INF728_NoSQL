@@ -81,7 +81,9 @@ Plusieurs points à revoir dans la requete 2:
 
 En attendant:
 
-create table requete2(year int, monthYear int, day int, country text, count int, eventid text, PRIMARY KEY((country), eventid, year, monthYear, day, count)) WITH CLUSTERING ORDER BY (eventid asc, year desc, monthYear asc, day asc, count desc);
+create table requete2(year int, monthYear int, day int, country text, count int, eventid text, PRIMARY KEY((country), year, monthYear, day,eventid, count)) WITH CLUSTERING ORDER BY (eventid asc, year desc, monthYear asc, day asc, count desc);
+
+create table requete2mapping(eventid text, country text, PRIMARY KEY((eventid), country)) ;
 
 Permet de faire les requetes avec count par jour en ordre descendant, mois et année (select sum(count) from requete2 where country="FR" group by eventid, year, monthYear ) mais l'ordre de la somme n'est pas pris en compte!
 ==> Plusieurs requetes?
