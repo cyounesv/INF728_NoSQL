@@ -105,7 +105,6 @@ object GKG_ETL extends App {
     e => Gkg(
       e(0), toBigInt(e(1)), toInt(e(2)), e(3), e(4), e(5), e(6), e(7), e(8), e(9), e(10), e(11), e(12), e(13), e(14), e(15), e(16),
       e(17), e(18), e(19), e(20), e(21), e(22), e(23), e(24), e(25), e(26), toYear(e(1)), toMonth(e(1)), toDay(e(1)))).toDF.cache
-print(dfGkg.describe())
   /*********** UDF **************/
 
   def getTone(tones: String): Double = {
@@ -126,32 +125,35 @@ print(dfGkg.describe())
 */
  /********* Dataframes to get Themes of articles with Date and Tone **********/
 
-  val df3Gkg = dfGkg.select("SourceCommonName",  "Year", "Month", "Day", "V2Themes", "V2Tone")
+  val df3Gkg = dfGkg.select("DocumentIdentifier", "SourceCommonName",  "Year", "Month", "Day", "V2Themes", "V2Tone")
                       .filter(!($"SourceCommonName" === ""))
                       //.groupBy("SourceCommonName", "V2Themes","Date", "V2Tone")
                       .withColumn("Type", lit("Themes"))
                       .withColumn("Theme_tmp", split($"V2Themes", ";"))
                       .withColumn("Tone", udfTone($"V2Tone")) // average tone of the article
 
-  val df3GkgThemes = df3Gkg.select( $"SourceCommonName",$"Year", $"Month", $"Day", explode($"Theme_tmp"), $"Tone") //creation d'une ligne par theme pr chaque article
+  val df3GkgThemes = df3Gkg.select( $"DocumentIdentifier", $"SourceCommonName",$"Year", $"Month", $"Day", explode($"Theme_tmp"), $"Tone") //creation d'une ligne par theme pr chaque article
 
-  val df3GkgCleanThemes = df3GkgThemes.select( "SourceCommonName","Year", "Month", "Day",  "col", "Tone")
+
+  val df3GkgCleanThemes = df3GkgThemes.select( "DocumentIdentifier", "SourceCommonName","Year", "Month", "Day",  "col", "Tone")
                               .withColumn("Theme", split($"col", ",")(0)) // Keep only Theme not it's location in the article
                               .drop("col", "V2Tones", "V2Themes", "Theme_tmp")
-
+  //Suppression des doublons theme dans un meme article
 /**** Verifier qu'on a bien un distinct que sur les themes lorsque l'on ajoutera d'autres jours de data ****/
-  val df3GkgSourceDistinctThemes = df3GkgCleanThemes.select( "SourceCommonName",  "Year", "Month", "Day",  "Tone", "Theme").distinct().filter(!($"Theme" === ""))
+
+  //val df3GkgSourceDistinctThemes = df3GkgCleanThemes.select( "SourceCommonName",  "Year", "Month", "Day",  "Tone", "Theme").distinct().filter(!($"Theme" === ""))
+  val df3GkgSourceDistinctThemes = df3GkgCleanThemes.dropDuplicates("DocumentIdentifier", "Theme").filter(!($"Theme" === ""))
 
 /**** Idem Verifier le group by avec plusieurs jours, et surtout veut-on creer un groupby month and year aussi??****/
 val df3GkgSourceDistinctThemesAvTone = df3GkgSourceDistinctThemes.select( "SourceCommonName",  "Year", "Month", "Day", "Tone", "Theme")
                               .groupBy( "SourceCommonName",  "Year", "Month", "Day", "Theme").agg(mean("Tone")).withColumn("AverageTone", udfAvTone($"avg(Tone)"))
                               .sortWithinPartitions("SourceCommonName")
 
-  df3GkgSourceDistinctThemesAvTone.show(30, false)
-
+  df3GkgSourceDistinctThemesAvTone.show(200, false)
+ // val test = df3GkgSourceDistinctThemesAvTone.filter('SourceCommonName' == "scotcampus.com")
   /************* Dataframes to get Persons from articles with Date and Tone *************/
 
-val df32 = dfGkg.select("SourceCommonName", "Year", "Month", "Day", "V2Persons", "V2Tone")
+/*val df32 = dfGkg.select("SourceCommonName", "Year", "Month", "Day", "V2Persons", "V2Tone")
                     .filter(!($"SourceCommonName" === ""))
                     .withColumn("Type", lit("Persons"))
                     .withColumn("Persons_tmp", split($"V2Persons", ";"))
@@ -168,11 +170,11 @@ val df32 = dfGkg.select("SourceCommonName", "Year", "Month", "Day", "V2Persons",
   val df3GkgSourceDistinctPersonsAvTone = df3GkgSourceDistinctPersons.select( "SourceCommonName", "Year", "Month", "Day", "Tone", "Person")
                               .groupBy( "SourceCommonName", "Year", "Month", "Day", "Person").agg(mean("Tone")).withColumn("AverageTone", udfAvTone($"avg(Tone)"))
 
-  df3GkgSourceDistinctPersonsAvTone.show(30, false)
+  df3GkgSourceDistinctPersonsAvTone.show(30, false)*/
 
   /************* Dataframes to get Locations from articles with Date and Tone *************/
 /*** Je garde le full name de la localisation, a voir si ce que l'on veut ***/
-  val df33 = dfGkg.select("SourceCommonName", "Year", "Month", "Day", "V2Locations", "V2Tone")
+ /* val df33 = dfGkg.select("SourceCommonName", "Year", "Month", "Day", "V2Locations", "V2Tone")
     .filter(!($"SourceCommonName"=== ""))
     .withColumn("Type", lit("Locations"))
     .withColumn("Locations_tmp", split($"V2Locations", ";"))
@@ -191,6 +193,8 @@ val df32 = dfGkg.select("SourceCommonName", "Year", "Month", "Day", "V2Persons",
     .sortWithinPartitions("SourceCommonName")
 
   df3GkgDistinctLocationsFullNameAvTone.show(30, false)
+*/
+  print(gkgRDD.count())
 
   println("END")
 
