@@ -149,6 +149,8 @@ val df3GkgSourceDistinctThemesAvTone = df3GkgSourceDistinctThemes.select( "Sourc
                               .groupBy( "SourceCommonName",  "Year", "Month", "Day", "Theme").agg(mean("Tone")).withColumn("AverageTone", udfAvTone($"avg(Tone)"))
                               .sortWithinPartitions("SourceCommonName")
  print( df3GkgSourceDistinctThemesAvTone.filter($"SourceCommonName" === "scotcampus.com").filter($"Theme" === "MANMADE_DISASTER_IMPLIED").count())
+
+  //test nbipython
  // df3GkgSourceDistinctThemesAvTone.filter($"SourceCommonName" === "scotcampus.com").filter($"Theme" === "EDUCATION").show( false)
  // val test = df3GkgSourceDistinctThemesAvTone.filter('SourceCommonName' == "scotcampus.com")
   df3GkgSourceDistinctThemesAvTone.show(20, false)
