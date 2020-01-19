@@ -148,9 +148,11 @@ object GKG_ETL extends App {
 val df3GkgSourceDistinctThemesAvTone = df3GkgSourceDistinctThemes.select( "SourceCommonName",  "Year", "Month", "Day", "Tone", "Theme")
                               .groupBy( "SourceCommonName",  "Year", "Month", "Day", "Theme").agg(mean("Tone")).withColumn("AverageTone", udfAvTone($"avg(Tone)"))
                               .sortWithinPartitions("SourceCommonName")
-
-  df3GkgSourceDistinctThemesAvTone.show(200, false)
+ print( df3GkgSourceDistinctThemesAvTone.filter($"SourceCommonName" === "scotcampus.com").filter($"Theme" === "MANMADE_DISASTER_IMPLIED").count())
+ // df3GkgSourceDistinctThemesAvTone.filter($"SourceCommonName" === "scotcampus.com").filter($"Theme" === "EDUCATION").show( false)
  // val test = df3GkgSourceDistinctThemesAvTone.filter('SourceCommonName' == "scotcampus.com")
+  df3GkgSourceDistinctThemesAvTone.show(20, false)
+
   /************* Dataframes to get Persons from articles with Date and Tone *************/
 
 /*val df32 = dfGkg.select("SourceCommonName", "Year", "Month", "Day", "V2Persons", "V2Tone")
