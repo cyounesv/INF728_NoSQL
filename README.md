@@ -55,13 +55,7 @@ Un seul keyspace.
 A voir si on ne met pas le pays comme partition pour avoir quelquechose de plus présentable
 On ne peut pas trier les resultats sur le count si count n'est pas dans les champs du clustering. A voir, surtout pour la requete 2
 
-CREATE TABLE requete1 (
-         ... jour DATE, 
-         ... pays text,
-         ... langue text,
-         ... count int,
-         ... PRIMARY KEY ((jour), pays, langue))
-         ... ;
+CREATE TABLE requete1 (jour DATE, pays text, langue text, count int, PRIMARY KEY ((jour), pays, langue));
 
 Une fois tout cela en place, sortez de cqlsh et lancer:
 
