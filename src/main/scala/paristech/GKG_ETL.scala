@@ -144,27 +144,28 @@ object GKG_ETL extends App {
 val df3GkgSourceDistinctThemesAvTone = df3GkgSourceDistinctThemes.select( "SourceCommonName",  "Year", "Month", "Day", "tone", "theme")
                               .groupBy( "SourceCommonName",  "Year", "Month", "Day", "theme").agg(mean("tone")).withColumn("AverageTone", udfAvTone($"avg(Tone)"))
                              // .sortWithinPartitions("SourceCommonName")
- print( df3GkgSourceDistinctThemesAvTone.filter($"SourceCommonName" === "scotcampus.com").filter($"Theme" === "MANMADE_DISASTER_IMPLIED").count())
+ //print( df3GkgSourceDistinctThemesAvTone.filter($"SourceCommonName" === "scotcampus.com").filter($"Theme" === "MANMADE_DISASTER_IMPLIED").count())
 
-  val df3GkgSourceDistinctThemesAvToneClean = df3GkgSourceDistinctThemesAvTone.withColumnRenamed("SourceCommonName","source")
+ val df3GkgSourceDistinctThemesAvToneClean = df3GkgSourceDistinctThemesAvTone.withColumnRenamed("SourceCommonName","source").withColumnRenamed("AverageTone", "tone")
             .withColumnRenamed("Year", "year") .withColumnRenamed("Month", "month") .withColumnRenamed("Day", "day")
+      .drop("avg(tone)")
 
   //test nbipython
  // df3GkgSourceDistinctThemesAvTone.filter($"SourceCommonName" === "scotcampus.com").filter($"Theme" === "EDUCATION").show( false)
  // val test = df3GkgSourceDistinctThemesAvTone.filter('SourceCommonName' == "scotcampus.com")
-  //df3GkgSourceDistinctThemesAvTone.show(20, false)
+  df3GkgSourceDistinctThemesAvToneClean.show(20, false)
 
 // On enregistre l'aggrégation dans la table requete3
 
   df3GkgSourceDistinctThemesAvToneClean.write
-  .cassandraFormat("requete3.1", "nosql", "test")
+  .cassandraFormat("req31", "nosql", "test")
   .mode(SaveMode.Append)
   .save()
 
   //nosql> CREATE TABLE req31(year int, month int, day int, source text, theme text, tone text, PRIMAREY KEY((source),year, month, day)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc);
 
   /************* Dataframes to get Persons from articles with Date and Tone *************/
-
+/*
 val df32 = dfGkg.select("SourceCommonName", "Year", "Month", "Day", "V2Persons", "V2Tone")
                     .filter(!($"SourceCommonName" === ""))
                     .withColumn("Type", lit("Persons"))
@@ -184,7 +185,7 @@ val df32 = dfGkg.select("SourceCommonName", "Year", "Month", "Day", "V2Persons",
 
  // df3GkgSourceDistinctPersonsAvTone.show(30, false)
   df3GkgSourceDistinctPersonsAvTone.write
-    .cassandraFormat("requete3.2", "nosql", "test")
+    .cassandraFormat("req32", "nosql", "test")
     .mode(SaveMode.Append)
     .save()
 
@@ -210,7 +211,7 @@ val df32 = dfGkg.select("SourceCommonName", "Year", "Month", "Day", "V2Persons",
 
  // df3GkgDistinctLocationsFullNameAvTone.show(30, false)
   df3GkgSourceDistinctPersonsAvTone.write
-    .cassandraFormat("requete3.3", "nosql", "test")
+    .cassandraFormat("req33", "nosql", "test")
     .mode(SaveMode.Append)
     .save()
 
@@ -218,7 +219,7 @@ val df32 = dfGkg.select("SourceCommonName", "Year", "Month", "Day", "V2Persons",
 
   println("END")
 
-
+*/
 
 
 
