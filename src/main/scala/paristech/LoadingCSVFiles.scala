@@ -16,7 +16,6 @@ import com.amazonaws.auth.BasicAWSCredentials
 import com.amazonaws.auth.BasicSessionCredentials
 import com.amazonaws.services.s3.AmazonS3Client
 import com.amazonaws.auth.BasicAWSCredentials
-    
 
 object LoadingCSVFiles extends App {
 
@@ -40,19 +39,18 @@ object LoadingCSVFiles extends App {
   spark.sparkContext.setLogLevel("WARN")
 
   import spark.implicits._
-    
+
   val AWS_ID = "AKIAQHELBFFBNTZKXAPU"
   val AWS_KEY = "cnyax70B0VVkJKGNjsAhZY6hNFSdSHAu2NHB+kkW"
 
   val BUCKET = "projet-nosql"
   // la classe AmazonS3Client n'est pas serializable
   // on rajoute l'annotation @transient pour dire a Spark de ne pas essayer de serialiser cette classe et l'envoyer aux executeurs
-  @transient 
+  /*@transient
   val awsClient = new AmazonS3Client(new BasicAWSCredentials(AWS_ID, AWS_KEY))
   spark.sparkContext.hadoopConfiguration.set("fs.s3a.access.key", AWS_ID) // mettre votre ID du fichier credentials.csv
   spark.sparkContext.hadoopConfiguration.set("fs.s3a.secret.key", AWS_KEY) // mettre votre secret du fichier credentials.csv
-    
-  
+  */
   println("On demarre le chargement")
 
   def fileDownloader(urlOfFileToDownload: String, fileName: String) = {
@@ -71,16 +69,26 @@ object LoadingCSVFiles extends App {
     }
   }
 
+  object AwsS3Client {
+    val s3 = new AmazonS3Client(new BasicAWSCredentials(AWS_ID, AWS_KEY))
+  }
+
+  spark.sparkContext.hadoopConfiguration.set("fs.s3a.access.key", AWS_ID) //(1) mettre votre ID du fichier credentials.csv
+  spark.sparkContext.hadoopConfiguration.set("fs.s3a.secret.key", AWS_KEY) //(2) mettre votre secret du fichier credentials.csv
+  spark.sparkContext.hadoopConfiguration.set("fs.s3a.connection.maximum", "1000") //(3) 15 par default !!!
+
   // Chargement du fichier "master"
   fileDownloader("http://data.gdeltproject.org/gdeltv2/masterfilelist.txt", "/tmp/masterfilelist.txt") // save the list file to the Spark Master
+  AwsS3Client.s3.putObject(BUCKET, "masterfilelist.txt", new File("/tmp/masterfilelist.txt"))
 
   // Chargement du fichier "master translation"
   fileDownloader("http://data.gdeltproject.org/gdeltv2/masterfilelist-translation.txt", "/tmp/masterfilelist-translation.txt") // save the list file to the Spark Master
+  AwsS3Client.s3.putObject(BUCKET, "masterfilelist-translation.txt", new File("/tmp/masterfilelist-translation.txt"))
 
   val filesDF = spark.read.
     option("delimiter", " ").
     option("infer_schema", "true").
-    csv("/tmp/masterfilelist.txt").
+    csv("masterfilelist.txt").
     withColumnRenamed("_c0", "size").
     withColumnRenamed("_c1", "hash").
     withColumnRenamed("_c2", "url")
@@ -88,17 +96,14 @@ object LoadingCSVFiles extends App {
   val filesDF2 = filesDF.union(spark.read.
     option("delimiter", " ").
     option("infer_schema", "true").
-    csv("/tmp/masterfilelist-translation.txt").
+    csv("masterfilelist-translation.txt").
     withColumnRenamed("_c0", "size").
     withColumnRenamed("_c1", "hash").
     withColumnRenamed("_c2", "url")).cache()
 
   filesDF2.show(false)
-  val sampleDF = filesDF2.filter(col("url").contains("/2019")).cache
+  val sampleDF = filesDF2.filter(col("url").contains("/201901[0:9][1:9]")).cache
 
-  object AwsS3Client{
-    val s3 = new AmazonS3Client(new BasicAWSCredentials(AWS_ID, AWS_KEY))
-}
   sampleDF.select("url").repartition(100).foreach(r => {
     val URL = r.getAs[String](0)
     val fileName = r.getAs[String](0).split("/").last
@@ -106,7 +111,7 @@ object LoadingCSVFiles extends App {
     val localFileName = dir + fileName
     fileDownloader(URL, localFileName)
     val localFile = new File(localFileName)
-    AwsS3Client.s3.putObject(BUCKET, fileName, localFile )
+    AwsS3Client.s3.putObject(BUCKET, fileName, localFile)
     localFile.delete()
 
   })
