@@ -121,7 +121,7 @@ object GKG_ETL extends App {
   val udfAvTone = udf(getAverageTone _)
 
  /********* Dataframes to get Themes of articles with Date and Tone **********/
-
+/*
   val df3Gkg = dfGkg.select("DocumentIdentifier", "SourceCommonName",  "Year", "Month", "Day", "V2Themes", "V2Tone")
                       .filter(!($"SourceCommonName" === ""))
                       //.groupBy("SourceCommonName", "V2Themes","Date", "V2Tone")
@@ -163,7 +163,7 @@ val df3GkgSourceDistinctThemesAvTone = df3GkgSourceDistinctThemes.select( "Sourc
   .save()
 
   //nosql> CREATE TABLE req31(year int, month int, day int, source text, theme text, tone text, PRIMAREY KEY((source),year, month, day)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc);
-
+*/
   /************* Dataframes to get Persons from articles with Date and Tone *************/
 /*
 val df32 = dfGkg.select("SourceCommonName", "Year", "Month", "Day", "V2Persons", "V2Tone")
@@ -183,14 +183,18 @@ val df32 = dfGkg.select("SourceCommonName", "Year", "Month", "Day", "V2Persons",
   val df3GkgSourceDistinctPersonsAvTone = df3GkgSourceDistinctPersons.select( "SourceCommonName", "Year", "Month", "Day", "tone", "person")
                               .groupBy( "SourceCommonName", "Year", "Month", "Day", "person").agg(mean("Tone")).withColumn("AverageTone", udfAvTone($"avg(tone)"))
 
+  val df3GkgSourceDistinctPersonessAvToneClean = df3GkgSourceDistinctPersonsAvTone.withColumnRenamed("SourceCommonName","source").withColumnRenamed("AverageTone", "tone")
+    .withColumnRenamed("Year", "year") .withColumnRenamed("Month", "month") .withColumnRenamed("Day", "day")
+    .drop("avg(tone)")
+
  // df3GkgSourceDistinctPersonsAvTone.show(30, false)
-  df3GkgSourceDistinctPersonsAvTone.write
+  df3GkgSourceDistinctPersonessAvToneClean.write
     .cassandraFormat("req32", "nosql", "test")
     .mode(SaveMode.Append)
     .save()
-
+*/
   /************* Dataframes to get Locations from articles with Date and Tone *************/
-/*** Je garde le full name de la localisation, a voir si ce que l'on veut ***/
+/*** On regarde par pays de localisation***/
   val df33 = dfGkg.select("SourceCommonName", "Year", "Month", "Day", "V2Locations", "V2Tone")
     .filter(!($"SourceCommonName"=== ""))
     .withColumn("Type", lit("Locations"))
@@ -199,18 +203,22 @@ val df32 = dfGkg.select("SourceCommonName", "Year", "Month", "Day", "V2Persons",
 
   val df3GkgLocations = df33.select( $"SourceCommonName", $"Year", $"Month", $"Day", explode($"Locations_tmp"), $"tone")
 
-  val df3GkgLocationsFullName = df3GkgLocations.select( "SourceCommonName", "Year", "Month", "Day", "col", "tone")
+  val df3GkgLocationsCountryName = df3GkgLocations.select( "SourceCommonName", "Year", "Month", "Day", "col", "tone")
     .withColumn("location", split($"col", "#")(2)) // On garde le nom du pays
     .drop("col", "V2Tones", "V2Locations", "Locations_tmp")
 
-  val df3GkgDistinctLocationsFullName = df3GkgLocationsFullName.select( "SourceCommonName", "Year", "Month", "Day", "tone", "location").distinct().filter(!($"Location" === ""))
+  val df3GkgDistinctLocationsCountryName = df3GkgLocationsCountryName.select( "SourceCommonName", "Year", "Month", "Day", "tone", "location").distinct().filter(!($"Location" === ""))
 
-  val df3GkgDistinctLocationsFullNameAvTone = df3GkgDistinctLocationsFullName.select( "SourceCommonName", "Year", "Month", "Day", "tone", "location")
+  val df3GkgDistinctLocationsCountryNameAvTone = df3GkgDistinctLocationsCountryName.select( "SourceCommonName", "Year", "Month", "Day", "tone", "location")
     .groupBy("SourceCommonName", "Year", "Month", "Day", "location").agg(mean("Tone")).withColumn("AverageTone", udfAvTone($"avg(tone)"))
     .sortWithinPartitions("SourceCommonName")
 
+val df3GkgSourceDistinctLocalisationsAvToneClean = df3GkgDistinctLocationsCountryNameAvTone.withColumnRenamed("SourceCommonName","source").withColumnRenamed("AverageTone", "tone")
+    .withColumnRenamed("Year", "year") .withColumnRenamed("Month", "month") .withColumnRenamed("Day", "day")
+    .drop("avg(tone)")
+
  // df3GkgDistinctLocationsFullNameAvTone.show(30, false)
-  df3GkgSourceDistinctPersonsAvTone.write
+  df3GkgSourceDistinctLocalisationsAvToneClean.write
     .cassandraFormat("req33", "nosql", "test")
     .mode(SaveMode.Append)
     .save()
@@ -219,7 +227,7 @@ val df32 = dfGkg.select("SourceCommonName", "Year", "Month", "Day", "V2Persons",
 
   println("END")
 
-*/
+
 
 
 
