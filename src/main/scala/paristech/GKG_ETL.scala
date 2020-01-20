@@ -118,11 +118,6 @@ object GKG_ETL extends App {
 
   val udfAvTone = udf(getAverageTone _)
 
-  /*def getTheme(theme: String): String = {
-    theme.split(",")(0)
-  }
-  val udfTheme = udf(getTheme _)
-*/
  /********* Dataframes to get Themes of articles with Date and Tone **********/
 
   val df3Gkg = dfGkg.select("DocumentIdentifier", "SourceCommonName",  "Year", "Month", "Day", "V2Themes", "V2Tone")
@@ -138,11 +133,10 @@ object GKG_ETL extends App {
   val df3GkgCleanThemes = df3GkgThemes.select( "DocumentIdentifier", "SourceCommonName","Year", "Month", "Day",  "col", "Tone")
                               .withColumn("Theme", split($"col", ",")(0)) // Keep only Theme not it's location in the article
                               .drop("col", "V2Tones", "V2Themes", "Theme_tmp")
-  //Suppression des doublons theme dans un meme article
+
 /**** Verifier qu'on a bien un distinct que sur les themes lorsque l'on ajoutera d'autres jours de data ****/
 
-  //val df3GkgSourceDistinctThemes = df3GkgCleanThemes.select( "SourceCommonName",  "Year", "Month", "Day",  "Tone", "Theme").distinct().filter(!($"Theme" === ""))
-  val df3GkgSourceDistinctThemes = df3GkgCleanThemes.dropDuplicates("DocumentIdentifier", "Theme").filter(!($"Theme" === ""))
+  val df3GkgSourceDistinctThemes = df3GkgCleanThemes.dropDuplicates("DocumentIdentifier", "Theme").filter(!($"Theme" === "")) //Suppression des doublons theme dans un meme article
 
 /**** Idem Verifier le group by avec plusieurs jours, et surtout veut-on creer un groupby month and year aussi??****/
 val df3GkgSourceDistinctThemesAvTone = df3GkgSourceDistinctThemes.select( "SourceCommonName",  "Year", "Month", "Day", "Tone", "Theme")
