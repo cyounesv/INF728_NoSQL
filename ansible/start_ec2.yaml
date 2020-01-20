@@ -5,15 +5,19 @@
     docker_path: "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
   remote_user: root
   tasks: 
+   # - name:
+
     - name: Create EC2 Instance
       command: | 
        aws2 ec2 run-instances 
        --region us-east-1
        --image-id ami-04b9e92b5572fa0d1 
-       --instance-type t2.micro 
+       --instance-type i3en.large 
        --key-name gdeltKeyPair 
        --count 2
        --security-group-ids sg-0868597c1c17eddf2
+       --subnet-id subnet-12b2bc75
+       --associate-public-ip-address
       register: output_create
 
     - name: Retrieve instance information
@@ -37,15 +41,92 @@
     - set_fact:
         ec2_instances: "{{output_json.Reservations[0].Instances}}"
     
-    # - debug:
-    #     msg: Première DNS adress {{ ec2_instances[0].PublicDnsName}}
+  
+    - name: Create EC2 Instance for seed cassandra
+      command: | 
+       aws2 ec2 run-instances 
+       --region us-east-1
+       --image-id ami-04b9e92b5572fa0d1 
+       --instance-type i3en.large 
+       --key-name gdeltKeyPair 
+       --count 1
+       --security-group-ids sg-0868597c1c17eddf2
+       --subnet-id subnet-12b2bc75
+       --associate-public-ip-address
+      register: output_create
+
+    - set_fact:
+        ec2_master_start_info: "{{ output_create.stdout | from_json }}"
+    - set_fact:
+        ec2_master: "{{ ec2_master_start_info.Instances[0] }}"
+        
+     #- debug:
+     #    msg: "{{ ec2_start_info.Instances[0] }}"
+
+    - name: Wait for Instance to be ready
+      command: aws2 ec2 wait instance-status-ok --region us-east-1 --instance-ids "{{ec2_master.InstanceId}}"
+      
+    - name: Get DNSAdress
+      command: aws2 ec2 describe-instances --region us-east-1 --filter "Name=instance-state-name,Values=running" --instance-ids "{{ec2_master.InstanceId}}"
+      register: output_dns
     
+    - set_fact:
+        output_json: "{{ output_dns.stdout | from_json }}"
+    - debug: 
+        msg: "{{ output_json }}"
+    
+    - set_fact:
+        ec2_master_instance: "{{output_json.Reservations[0].Instances[0]}}"
+   
+
+    - name: Mount hard drive
+      command: |
+        ssh -i "{{ path_pem }}" ubuntu@"{{ec2_master_instance.PublicDnsName}}"
+        sudo mkfs.ext4 /dev/nvme0n1;
+        sudo mount -t ext4 /dev/nvme0n1 /mnt
+        
+   
+    - name: apt update seed
+      command: |
+        ssh -i "{{ path_pem }}" ubuntu@"{{ec2_master_instance.PublicDnsName}}" 
+        sudo apt-get -y update
+      
+
+
+
+    - name: Docker pre-instalation seed
+      command: |
+        ssh -i "{{ path_pem }}" ubuntu@"{{ec2_master_instance.PublicDnsName}}" 
+        sudo apt install --yes docker.io;
+        sudo apt install --yes docker;
+        sudo systemctl unmask docker.service;
+        sudo systemctl unmask docker.socket;
+        sudo systemctl start docker.service;	
+        sudo usermod -a -G docker ubuntu	
+
+
+    - name: docker run cassandra seed
+      command: |
+        ssh -i "{{ path_pem }}" ubuntu@"{{ec2_master_instance.PublicDnsName}}"
+        docker run --name cassandra -d -v /mnt:/var/lib/cassandra -e CASSANDRA_BROADCAST_ADDRESS="{{ec2_master_instance.PrivateIpAddress}}" -p 7000:7000 cassandra:latest
+      
+    # - debug:
+    #     msg: Premiere DNS adress {{ ec2_instances[0].PublicDnsName}}
+    
+    
+    - name: Mount hard drive
+      command: |
+        ssh -i "{{ path_pem }}" ubuntu@"{{item.PublicDnsName}}"
+        sudo mkfs.ext4 /dev/nvme0n1;
+        sudo mount -t ext4 /dev/nvme0n1 /mnt
+      loop: "{{ ec2_instances }}"
+        
     - name: apt update
       command: |
         ssh -i "{{ path_pem }}" ubuntu@"{{item.PublicDnsName}}" 
         sudo apt-get -y update
       loop: "{{ ec2_instances }}"
-    
+      
 
     - name: Docker pre-instalation
       command: |
@@ -57,37 +138,14 @@
         sudo systemctl start docker.service;	
         sudo usermod -a -G docker ubuntu	
       loop: "{{ ec2_instances }}"
-
-#   - name: add-apt-repository
-#     c	ommand: |
-#       ssh -i "{{ path_pem }}" ubuntu@"{{item.PublicDnsName}}" 
-#       'sudo add-apt-repository "{{docker_path}}"'
-#     loop: "{{ ec2_instances }}"  
-
-#    - name: apt update
-#      command: |
-#        ssh -i "{{ path_pem }}" ubuntu@"{{item.PublicDnsName}}" 
-#        sudo apt-get -y update
-#      loop: "{{ ec2_instances }}"
-
-#   - name: docker install
-#      command: |
-#        ssh -i "{{ path_pem }}" ubuntu@"{{item.PublicDnsName}}" 
-#        sudo apt-get -y install docker-ce docker-ce-cli containerd.io
-#      loop: "{{ ec2_instances }}"
-
-#    - name: docker start
-#      command: |
-#        ssh -i "{{ path_pem }}" ubuntu@"{{item.PublicDnsName}}"
-#        sudo service docker start
-#      loop: "{{ ec2_instances }}"
     
+    - pause:
+       minutes: 2
 
-    - name: docker run cassandra
+    - name: docker run cassandra 
       command: |
         ssh -i "{{ path_pem }}" ubuntu@"{{item.PublicDnsName}}"
-        sudo docker run hello-world
+        docker run --name some-cassandra -d -v /mnt:/var/lib/cassandra -e CASSANDRA_BROADCAST_ADDRESS="{{item.PrivateIpAddress}}" -p 7000:7000 -e CASSANDRA_SEEDS="{{ec2_master_instance.PrivateIpAddress}}" cassandra:latest
       loop: "{{ ec2_instances }}"
-
-      
-    # - name:
+      loop_control:
+        pause: 120

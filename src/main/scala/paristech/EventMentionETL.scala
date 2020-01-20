@@ -31,13 +31,12 @@ object EventMentionETL extends App {
     "spark.shuffle.file.buffer" -> "32k",
     "spark.default.parallelism" -> "12",
     "spark.sql.shuffle.partitions" -> "12",
-    "spark.driver.maxResultSize" -> "2g",
-    "spark.master" -> "local[*]"))
+    "spark.driver.maxResultSize" -> "2g"))
 
   val spark = SparkSession
     .builder
     .config(conf)
-    .appName("TP Spark : Trainer")
+    .appName("ETL For Event and Mention")
     .getOrCreate()
 
   spark.sparkContext.setLogLevel("WARN")
@@ -232,7 +231,7 @@ object EventMentionETL extends App {
 
   val cassandraToSave = cassandra1.withColumnRenamed("SQLDATE", "jour").withColumnRenamed("ActionGeo_CountryCode", "pays").withColumnRenamed("MentionDocTranslationInfo", "langue")
 
-  spark.setCassandraConf("Test", CassandraConnectorConf.ConnectionHostParam.option("127.0.0.1"))
+  spark.setCassandraConf("Datacenter1", CassandraConnectorConf.ConnectionHostParam.option("172.31.7.206"))
 
   val createDDL = """CREATE TEMPORARY VIEW words
      USING org.apache.spark.sql.cassandra
