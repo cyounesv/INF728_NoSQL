@@ -29,8 +29,7 @@ object LoadingCSVFiles extends App {
     "spark.shuffle.file.buffer" -> "32k",
     "spark.default.parallelism" -> "12",
     "spark.sql.shuffle.partitions" -> "12",
-    "spark.driver.maxResultSize" -> "2g",
-    "spark.master" -> "local[*]"))
+    "spark.driver.maxResultSize" -> "2g"))
 
   val spark = SparkSession
     .builder
