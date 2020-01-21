@@ -33,7 +33,11 @@ object LoadingCSVFiles extends App {
     
   val AWS_ID = AwsS3Client.AWS_ID
   val AWS_KEY = AwsS3Client.AWS_KEY
+  spark.sparkContext.hadoopConfiguration.set("fs.s3a.access.key", AWS_ID) //(1) mettre votre ID du fichier credentials.csv
+  spark.sparkContext.hadoopConfiguration.set("fs.s3a.secret.key", AWS_KEY) //(2) mettre votre secret du fichier credentials.csv
+  spark.sparkContext.hadoopConfiguration.set("fs.s3a.connection.maximum", "1000") //(3) 15 par default !!!
 
+  
   spark.sparkContext.setLogLevel("WARN")
 
   // la classe AmazonS3Client n'est pas serializable
@@ -62,9 +66,6 @@ object LoadingCSVFiles extends App {
   }
   
 
-  spark.sparkContext.hadoopConfiguration.set("fs.s3a.access.key", AWS_ID) //(1) mettre votre ID du fichier credentials.csv
-  spark.sparkContext.hadoopConfiguration.set("fs.s3a.secret.key", AWS_KEY) //(2) mettre votre secret du fichier credentials.csv
-  spark.sparkContext.hadoopConfiguration.set("fs.s3a.connection.maximum", "1000") //(3) 15 par default !!!
 
   // Chargement du fichier "master"
   fileDownloader("http://data.gdeltproject.org/gdeltv2/masterfilelist.txt", "/tmp/masterfilelist.txt") // save the list file to the Spark Master

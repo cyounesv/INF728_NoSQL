@@ -5,8 +5,8 @@ import com.amazonaws.auth.BasicAWSCredentials
 
 
 object AwsS3Client {
-  val AWS_ID = "AKIAQHELBFFBNTZKXAPU"
-  val AWS_KEY = "cnyax70B0VVkJKGNjsAhZY6hNFSdSHAu2NHB+kkW"
+  val AWS_ID = ""
+  val AWS_KEY = ""
 
   val BUCKET = "projet-nosql"
 
