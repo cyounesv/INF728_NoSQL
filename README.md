@@ -89,8 +89,8 @@ Permet de faire les requetes avec count par jour en ordre descendant, mois et an
  Cle de clustering : year, month, day qui permettra les aggregations demandees.
  
  Creations des tables:
-- CREATE TABLE req31(year int, month int, day int, source text, theme text, tone text, PRIMARY KEY((source),year, month, day)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc);
-- CREATE TABLE req32(year int, month int, day int, source text, person text, tone text, PRIMARY KEY((source),year, month, day)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc);
-- CREATE TABLE req33(year int, month int, day int, source text, location text, tone text, PRIMARY KEY((source),year, month, day)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc);
+- CREATE TABLE req31(year int, month int, day int, source text,count int, theme text, tone double, PRIMARY KEY((source),year, month, day, count)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc, count desc);
+- CREATE TABLE req32(year int, month int, day int, source text,count int, person text, tone double, PRIMARY KEY((source),year, month, day, count)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc, count desc);
+- CREATE TABLE req33(year int, month int, day int, source text,count int, location text, tone double, PRIMARY KEY((source),year, month, day, count)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc, count desc);
 
 
