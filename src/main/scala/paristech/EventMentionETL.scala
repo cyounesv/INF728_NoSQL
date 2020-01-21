@@ -241,11 +241,10 @@ spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra 
     .withColumn("MentionDate", dateTimeToDate(col("MentionTimeDate")))
 
   // On récupère les mentions dont la date est différente de celle de l'évenement (elles sont déjà dans cassandra)
-  //val dfMentionAlreadyInDb = dfMentionUpdated.filter(col("EventDate") =!= col("MentionDate") )
+  val dfMentionAlreadyInDb = dfMentionUpdated.filter(col("EventDate") =!= col("MentionDate") )
 
-  // Pour tester lorsqu'un event des jours passés survient: (penser à le supprimer dans cassnadra avant):
-  val dfMentionAlreadyInDb = dfMentionUpdated.filter(col("GLOBALEVENTID") === 890122482 )
-  dfMentionAlreadyInDb.show()
+  //Pour tester lorsqu'un event des jours passés survient: (penser à le supprimer dans cassnadra avant):
+  //val dfMentionAlreadyInDb = dfMentionUpdated.filter(col("GLOBALEVENTID") === 890019084 )
 
   // on récupère les autres à enregistrer
   //val dfMentionFiltered = dfMention.filter(col("EventDate") === col("MentionDate") )
@@ -255,27 +254,30 @@ spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra 
     .groupBy("GLOBALEVENTID")
     .count()
 
-  val requete2 = dfEvent.join(numMentions, Seq("GLOBALEVENTID")).select("GLOBALEVENTID", "SQLDATE","ActionGeo_CountryCode","Year","MonthYear", "count")
+  val requete2 = dfEvent.join(numMentions, Seq("GLOBALEVENTID")).select("GLOBALEVENTID", "SQLDATE","ActionGeo_CountryCode","Year","MonthYear", "count", "Actor1Geo_CountryCode", "Actor2Geo_CountryCode")
     .withColumn("ActionGeo_CountryCode", when($"ActionGeo_CountryCode"==="", "unknown")
       .otherwise($"ActionGeo_CountryCode")
-    ).sort($"count".desc)
+    )
 
   // event mentionned on several dates : id = 871834248
 
-  val requete2ToSave = requete2.withColumnRenamed("SQLDATE","day")
+  val requete2Renamed = requete2.withColumnRenamed("SQLDATE","day")
     .withColumnRenamed("ActionGeo_CountryCode","country")
     .withColumnRenamed("GLOBALEVENTID","eventid")
     .withColumnRenamed("Year","year")
     .withColumnRenamed("MonthYear","monthyear")
-  requete2ToSave.show()
+    .withColumnRenamed("Actor1Geo_CountryCode","actor1countrycode")
+    .withColumnRenamed("Actor2Geo_CountryCode","actor2countrycode")
 
-  val request2Mapping = requete2ToSave.select("eventid", "country")
+
+  val requete2ToSave = requete2Renamed.select("eventid", "country", "year","monthyear", "day", "count")
+  val request2Mapping = requete2Renamed.select("eventid", "country", "day", "actor1countrycode", "actor2countrycode")
 
 
   spark.setCassandraConf("Test", CassandraConnectorConf.ConnectionHostParam.option("127.0.0.1"))
 
 // On enregistre l'aggrégation dans la table requete2 et on sauveegarde l'association eventid/pays dans la table requete2mapping
- /*
+
   requete2ToSave.write
    .cassandraFormat("requete2", "nosql", "test")
    .mode(SaveMode.Append)
@@ -285,51 +287,86 @@ spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra 
    .cassandraFormat("requete2mapping", "nosql", "test")
    .mode(SaveMode.Append)
    .save()
-*/
+
   // Si on a des eventid qui sont déjà présents dans cassandra:
 if(dfMentionAlreadyInDb.count() !=0) {
 
   // On fait l'aggrégation du nombre de mentions
-  val dfMentionAlreadyInDbCount = dfMentionAlreadyInDb.select("GLOBALEVENTID", "MentionDate")
-    .groupBy("GLOBALEVENTID", "MentionDate")
+  val dfMentionAlreadyInDbAgg = dfMentionAlreadyInDb.select("GLOBALEVENTID", "EventDate")
+    .groupBy("GLOBALEVENTID", "EventDate")
     .count()
 
-  // udf pour aller chercher le pays de l'eventid dans cassandra
- def getCountry(eventid: String) = {
-   val test1 = spark.sparkContext.cassandraTable("nosql", "requete2mapping")
-     .select("country")
-     .where("eventid='" + eventid + "'")
-   if (test1.count() == 0) {
-     null
-   }else{
-     test1.first().getString("country")
-   }
- }
+  // udf qui permet de requeter la table requete2mapping afin d'avoir le pays et la date de l'event à partir de son id
+  def getFields(eventid: String):Array[String]= {
+    val getCountryDayTable = spark.sparkContext.cassandraTable("nosql", "requete2mapping")
+      .select("country", "day")
+      .where("eventid='" + eventid + "'")
+    if (getCountryDayTable.count() == 0) {
+      println("Error, requete2mapping does not contain eventid: " +eventid)
+      Array("", "")
+    }else{
+      val country = getCountryDayTable.first().getString("country")
+      val day = getCountryDayTable.first().getString("day")
+      Array(country, day)
+    }
 
- val getCountryCol = udf(getCountry _)
+  }
+  val getFieldsCol = udf(getFields _)
+
+  // udf qui permet d'aller chercher le nombre de mention dans la table requête 2
+  def getCount(country: String, year:Int, monthyear:Int, day:Int, count: Int, eventid:String): Int= {
+    val getCountTable = spark.sparkContext.cassandraTable("nosql", "requete2")
+      .select("count")
+      .where("country='" + country + "'")
+      .where("year=" + year.toString())
+      .where("monthyear=" + monthyear.toString())
+      .where("day=" + day.toString())
+      .where("eventid='" + eventid + "'")
+
+    if (getCountTable.count() == 0) {
+      println("Error, requete2 does not contain eventid: " + eventid)
+      0
+    } else {
+      getCountTable.first().getInt("count") + count
+    }
+  }
+  val getCountCol = udf(getCount _)
 
   // udf pour déterminer year et monthyear à partir de la date de la mention
- def toMonthYear(date: Int, size: Int) = {
-   date.toString().take(size).toInt
+ def toMonthYear(date: String, size: Int) = {
+   //date.toString().take(size).toInt
+   date.take(size)
  }
 
  val date = udf(toMonthYear _)
 
- val dfMentionAlreadyInDbUpdated = dfMentionAlreadyInDbCount.withColumn("country", getCountryCol(col("GLOBALEVENTID")))
-   .filter(col("country").isNotNull)
-   .withColumn("monthyear", date(col("MentionDate"), lit(6)))
-   .withColumn("year", date(col("MentionDate"), lit(4)))
-   .withColumnRenamed("GLOBALEVENTID", "eventid")
-   .withColumnRenamed("MentionDate", "day")
 
-  dfMentionAlreadyInDbUpdated.show()
-  if (dfMentionAlreadyInDbUpdated.count() != 0){
+ val dfMentionAlreadyInDbUpdated = dfMentionAlreadyInDbAgg.withColumn("newCol", getFieldsCol(col("GLOBALEVENTID")))
+   .select($"GLOBALEVENTID",$"count", $"newCol"(0).as("country"), $"newCol"(1).as("day"))
+   .filter(col("country").isNotNull)
+   .withColumn("monthyear", date(col("day"), lit(6)))
+   .withColumn("year", date(col("day"), lit(4)))
+   .withColumnRenamed("GLOBALEVENTID", "eventid")
+   .withColumn("count", getCountCol(
+     col("country"), col("year"), col("monthyear"),col("day"), col("count"), col("eventid"))
+   )
+  //dfMentionAlreadyInDbUpdated.show()
+
+  //val startTimeMillis = System.currentTimeMillis()
+
+  if (dfMentionAlreadyInDbUpdated.count() != 0) {
     dfMentionAlreadyInDbUpdated.write
       .cassandraFormat("requete2", "nosql", "test")
       .mode(SaveMode.Append)
+      .option("confirm.truncate", "true")
       .save()
   }
+  //val endTimeMillis = System.currentTimeMillis()
+  //val durationSeconds = (endTimeMillis - startTimeMillis) / 1000
+  //println(durationSeconds)
+
 }
+
  println("end")
 
 }
