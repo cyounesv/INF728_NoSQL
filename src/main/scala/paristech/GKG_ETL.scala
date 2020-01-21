@@ -15,7 +15,13 @@ import com.datastax.spark.connector.rdd.ReadConf
 import org.apache.commons.math3.stat.descriptive.moment.Mean
 import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.functions.explode
-import paristech.EventMentionETL.spark
+import main.scala.paristech.AwsS3Client
+import org.apache.spark.sql.SaveMode
+import java.util.Calendar
+import java.util.GregorianCalendar
+import scala.collection.mutable.ListBuffer
+import java.text.SimpleDateFormat
+import main.scala.paristech.CassandraObject
 
 object GKG_ETL extends App {
 
@@ -30,17 +36,21 @@ object GKG_ETL extends App {
     "spark.shuffle.file.buffer" -> "32k",
     "spark.default.parallelism" -> "12",
     "spark.sql.shuffle.partitions" -> "12",
-    "spark.driver.maxResultSize" -> "2g",
-    "spark.master" -> "local[*]"))
+    "spark.driver.maxResultSize" -> "2g" ,
+    "spark.cassandra.connection.host"->CassandraObject.IP))
 
   val spark = SparkSession
     .builder
     .config(conf)
-    .appName("TP Spark : Trainer")
+    .appName("Event And Mention ETL")
     .getOrCreate()
 
-  spark.sparkContext.setLogLevel("WARN")
-  spark.setCassandraConf("Test", CassandraConnectorConf.ConnectionHostParam.option("127.0.0.1"))
+  val AWS_ID = AwsS3Client.AWS_ID
+  val AWS_KEY = AwsS3Client.AWS_KEY
+  spark.sparkContext.hadoopConfiguration.set("fs.s3a.access.key", AWS_ID) //(1) mettre votre ID du fichier credentials.csv
+  spark.sparkContext.hadoopConfiguration.set("fs.s3a.secret.key", AWS_KEY) //(2) mettre votre secret du fichier credentials.csv
+  spark.sparkContext.hadoopConfiguration.set("fs.s3a.connection.maximum", "1000") //(3) 15 par default !!!
+  
 
   import spark.implicits._
 
@@ -81,7 +91,9 @@ object GKG_ETL extends App {
                   Day: Int
   )
 
-  val gkgRDD = spark.sparkContext.binaryFiles("/tmp/2019*.gkg.csv.zip", 100).
+  val date = "20190101"
+  
+  val gkgRDD = spark.sparkContext.binaryFiles("s3a://" + AwsS3Client.BUCKET + "/" + date + "*.gkg.csv.zip", 100).
     flatMap { // decompresser les fichiers
       case (name: String, content: PortableDataStream) =>
         val zis = new ZipInputStream(content.open)
@@ -121,7 +133,7 @@ object GKG_ETL extends App {
   val udfAvTone = udf(getAverageTone _)
 
  /********* Dataframes to get Themes of articles with Date and Tone **********/
-/*
+
   val df3Gkg = dfGkg.select("DocumentIdentifier", "SourceCommonName",  "Year", "Month", "Day", "V2Themes", "V2Tone")
                       .filter(!($"SourceCommonName" === ""))
                       //.groupBy("SourceCommonName", "V2Themes","Date", "V2Tone")
@@ -153,7 +165,8 @@ val df3GkgSourceDistinctThemesAvTone = df3GkgSourceDistinctThemes.select( "Sourc
   //test nbipython
  // df3GkgSourceDistinctThemesAvTone.filter($"SourceCommonName" === "scotcampus.com").filter($"Theme" === "EDUCATION").show( false)
  // val test = df3GkgSourceDistinctThemesAvTone.filter('SourceCommonName' == "scotcampus.com")
-  df3GkgSourceDistinctThemesAvToneClean.show(20, false)
+ 
+      //df3GkgSourceDistinctThemesAvToneClean.show(20, false)
 
 // On enregistre l'aggrégation dans la table requete3
 
@@ -163,9 +176,9 @@ val df3GkgSourceDistinctThemesAvTone = df3GkgSourceDistinctThemes.select( "Sourc
   .save()
 
   //nosql> CREATE TABLE req31(year int, month int, day int, source text, theme text, tone text, PRIMAREY KEY((source),year, month, day)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc);
-*/
+
   /************* Dataframes to get Persons from articles with Date and Tone *************/
-/*
+
 val df32 = dfGkg.select("SourceCommonName", "Year", "Month", "Day", "V2Persons", "V2Tone")
                     .filter(!($"SourceCommonName" === ""))
                     .withColumn("Type", lit("Persons"))
@@ -192,7 +205,7 @@ val df32 = dfGkg.select("SourceCommonName", "Year", "Month", "Day", "V2Persons",
     .cassandraFormat("req32", "nosql", "test")
     .mode(SaveMode.Append)
     .save()
-*/
+
   /************* Dataframes to get Locations from articles with Date and Tone *************/
 /*** On regarde par pays de localisation***/
   val df33 = dfGkg.select("SourceCommonName", "Year", "Month", "Day", "V2Locations", "V2Tone")
