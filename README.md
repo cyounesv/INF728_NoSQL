@@ -82,5 +82,15 @@ Permet de faire les requetes avec count par jour en ordre descendant, mois et an
 
 ### Dispo dans la branche requete2
 
+## Requete 3, dispo dans le master
+ Creations de trois tables distinctes : une pour les themes, une pour les Personnes et la derniere pour les Lieux (nous avons retenu les pays).
+ 
+ Cle de partition : La source, c'est sur elle que nous allons requeter, et elle permet intuitivement un bon partitionnement.
+ Cle de clustering : year, month, day qui permettra les aggregations demandees.
+ 
+ Creations des tables:
+- CREATE TABLE req31(year int, month int, day int, source text, theme text, tone text, PRIMARY KEY((source),year, month, day)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc);
+- CREATE TABLE req32(year int, month int, day int, source text, person text, tone text, PRIMARY KEY((source),year, month, day)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc);
+- CREATE TABLE req33(year int, month int, day int, source text, location text, tone text, PRIMARY KEY((source),year, month, day)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc);
 
 
