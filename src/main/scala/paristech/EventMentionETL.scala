@@ -120,7 +120,9 @@ object EventMentionETL extends App {
     ActionGeo_Long: Double,
     ActionGeo_FeatureID: String,
     DATEADDED: BigInt,
-    SOURCEURL: String)
+    SOURCEURL: String,
+    Month: Int,
+    Day: Int)
 
     case class EventMention(
       GLOBALEVENTID: Int,
@@ -187,12 +189,15 @@ object EventMentionETL extends App {
     def toDouble(s: String): Double = try { if (s.isEmpty) 0 else s.toDouble } catch {case e: Exception => 0}
     def toInt(s: String): Int = if (s.isEmpty) 0 else s.toInt
     def toBigInt(s: String): BigInt = if (s.isEmpty) BigInt(0) else BigInt(s)
+    def toYear(s: String): Int = if (s.isEmpty) 0 else (s.slice(0, 0 + 4)).toInt
+    def toMonth(s: String): Int = if (s.isEmpty) 0 else (s.slice(4, 4 + 2)).toInt
+    def toDay(s: String): Int = if (s.isEmpty) 0 else (s.slice(6, 6 + 2)).toInt
 
     val dfEvent = cachedEvents.map(_.split("\t")).filter(_.length == 61).map(
       e => Event(
         toInt(e(0)), toInt(e(1)), toInt(e(2)), toInt(e(3)), toDouble(e(4)), e(5), e(6), e(7), e(8), e(9), e(10), e(11), e(12), e(13), e(14), e(15), e(16), e(17), e(18), e(19), e(20),
         e(21), e(22), e(23), e(24), toInt(e(25)), e(26), e(27), e(28), toInt(e(29)), toDouble(e(30)), toInt(e(31)), toInt(e(32)), toInt(e(33)), toDouble(e(34)), toInt(e(35)), e(36), e(37), e(38), e(39), toDouble(e(40)),
-        toDouble(e(41)), e(42), toInt(e(43)), e(44), e(45), e(46), e(47), toDouble(e(48)), toDouble(e(49)), e(50), toInt(e(51)), e(52), e(53), e(54), e(55), toDouble(e(56)), toDouble(e(57)), e(58), toBigInt(e(59)), e(60))).toDF.cache
+        toDouble(e(41)), e(42), toInt(e(43)), e(44), e(45), e(46), e(47), toDouble(e(48)), toDouble(e(49)), e(50), toInt(e(51)), e(52), e(53), e(54), e(55), toDouble(e(56)), toDouble(e(57)), e(58), toBigInt(e(59)), e(60), toMonth(e(1)), toDay(e(1)))).toDF.cache
 
     
 
@@ -231,7 +236,7 @@ object EventMentionETL extends App {
 
     val eventLanguage = dfMention.select("GLOBALEVENTID", "MentionDocTranslationInfo").distinct
 
-    val cassandra1 = dfEvent.join(eventLanguage, Seq("GLOBALEVENTID")).select("SQLDATE", "ActionGeo_CountryCode", "MentionDocTranslationInfo").groupBy("SQLDATE", "ActionGeo_CountryCode", "MentionDocTranslationInfo").count().sort($"count".desc)
+    val cassandra1 = dfEvent.join(eventLanguage, Seq("GLOBALEVENTID")).select("SQLDATE", "ActionGeo_CountryCode", "MentionDocTranslationInfo").groupBy("SQLDATE", "ActionGeo_CountryCode", "MentionDocTranslationInfo").count()
 
     // Pour verifier la jointure
     //val cassandra2 = dfEvent.select("GLOBALEVENTID", "SQLDATE", "ActionGeo_CountryCode", "Year", "MonthYear").groupBy("Year", "MonthYear", "SQLDATE", "ActionGeo_CountryCode").count().sort($"count".desc)
