@@ -337,51 +337,8 @@ object EventMentionETL extends App {
         .agg(sum("MentionDocTone"), count("GLOBALEVENTID"))
         .withColumnRenamed("sum(MentionDocTone)", "sumtoneNew")
         .withColumnRenamed("count(GLOBALEVENTID)", "countNew")
+      .withColumnRenamed("GLOBALEVENTID", "eventid")
 
-      // udf qui permet de requeter la table requete2mapping afin d'avoir le pays et la date de l'event à partir de son id
-      def getFields(eventid: String): Array[String] = {
-        val table = spark.sparkContext.cassandraTable("nosql", "requete2mapping")
-        val getCountryDayTable = table
-          .select("country", "day", "count", "sumtone", "actor1countrycode", "actor2countrycode", "actor1lat", "actor2lat", "actor1long", "actor2long")
-          .where("eventid='" + eventid + "'")
-        if (getCountryDayTable.isEmpty) {
-          log.error("Error, requete2mapping does not contain eventid: " + eventid)
-          Array("", "", "", "","", "", "", "","", "")
-        } else {
-          val country = getCountryDayTable.first().getString("country")
-          val day = getCountryDayTable.first().getString("day")
-          val count = getCountryDayTable.first().getString("count")
-          val sumtone = getCountryDayTable.first().getString("sumtone")
-          val actor1countrycode = getCountryDayTable.first().getString("actor1countrycode")
-          val actor2countrycode = getCountryDayTable.first().getString("actor2countrycode")
-          val actor1lat = getCountryDayTable.first().getString("actor1lat")
-          val actor2lat = getCountryDayTable.first().getString("actor2lat")
-          val actor1long = getCountryDayTable.first().getString("actor1long")
-          val actor2long = getCountryDayTable.first().getString("actor2long")          
-          Array(country, day, count, sumtone,actor1countrycode, actor2countrycode, actor1lat, actor2lat, actor1long, actor2long)
-        }
-
-      }
-      val getFieldsCol = udf(getFields _)
-
-      // udf qui permet d'aller chercher le nombre de mention dans la table requête 2
-      /*def getCount(country: String, year:Int, monthyear:Int, day:Int, count: Int, eventid:String): Int= {
-    val getCountTable = spark.sparkContext.cassandraTable("nosql", "requete2")
-      .select("count")
-      .where("country='" + country + "'")
-      .where("year=" + year.toString())
-      .where("monthyear=" + monthyear.toString())
-      .where("day=" + day.toString())
-      .where("eventid='" + eventid + "'")
-
-    if (getCountTable.count() == 0) {
-      println("Error, requete2 does not contain eventid: " + eventid)
-      0
-    } else {
-      getCountTable.first().getInt("count") + count
-    }
-  }
-   */
 
       // udf pour déterminer year et monthyear à partir de la date de la mention
       def toMonthYear(date: String, size: Int) = {
@@ -393,20 +350,20 @@ object EventMentionETL extends App {
       
       
 
-      val dfMentionAlreadyInDbUpdated = dfMentionAlreadyInDbAgg.withColumn("newCol", getFieldsCol(col("GLOBALEVENTID")))
-        .select($"GLOBALEVENTID", $"countNew", $"newCol"(0).as("country"), $"newCol"(1).as("day"),
-          $"newCol"(2).as("countOr").cast(IntegerType), $"newCol"(3).as("sumtoneOr").cast(IntegerType),
-          $"newCol"(4).as("actor1countrycode"), $"newCol"(5).as("actor2countrycode"),
-          $"newCol"(6).as("actor1lat"), $"newCol"(7).as("actor2lat"),
-          $"newCol"(8).as("actor1long"), $"newCol"(9).as("actor2long"),
-          $"sumtoneNew")
+    val getCountryDayTable = spark.sqlContext.read.format("org.apache.spark.sql.cassandra")
+      .options(Map( "table" -> "requete2mapping", "keyspace" -> "nosql" , "cluster" -> "test"))
+      .load
+
+    val dfMentionAlreadyInDbUpdated = getCountryDayTable
         .filter(col("country").isNotNull)
+      .join(dfMentionAlreadyInDbAgg , Seq("eventid"))
         .withColumn("monthyear", date(col("day"), lit(6)))
         .withColumn("year", date(col("day"), lit(4)))
-        .withColumnRenamed("GLOBALEVENTID", "eventid")
-        .withColumn("count", $"countOr" + $"countNew")
-        .withColumn("sumtone", $"sumtoneOr" + $"sumtoneNew")
-        .drop("sumtoneOr").drop("sumtoneNew").drop("countOr").drop("countNew")
+      .withColumn("count", $"count" + $"countNew")
+      .withColumn("sumtone", $"sumtone" + $"sumtoneNew")
+      .drop("sumtoneNew").drop("countNew").drop("EventDate")
+
+
 
       //dfMentionAlreadyInDbUpdated.show()
 
