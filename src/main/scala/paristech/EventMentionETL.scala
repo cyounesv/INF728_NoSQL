@@ -18,6 +18,7 @@ import com.datastax.spark.connector.cql.{CassandraConnector, CassandraConnectorC
 import com.datastax.spark.connector.rdd.ReadConf
 import org.apache.spark.sql.functions.udf
 import com.datastax.spark.connector._
+import org.apache.spark.sql.types.IntegerType
 
 
 
@@ -51,6 +52,8 @@ object EventMentionETL extends App {
 
   /**
    * Je suppose le chargement dans le repertoire /tmp
+   *
+   *
    */
 
   // D.E Evenement
@@ -233,17 +236,13 @@ spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra 
   }
   val dateTimeToDate = udf(toDate _)
 
-  val dfMentionUpdated = dfMention.select("GLOBALEVENTID", "EventTimeDate", "MentionTimeDate")
-    .withColumn("EventDate", dateTimeToDate(col("EventTimeDate")))
-    .withColumn("MentionDate", dateTimeToDate(col("MentionTimeDate")))
-
-  val dfMentionUpdated4 = dfMention.select("GLOBALEVENTID", "EventTimeDate", "MentionTimeDate", "MentionDocTone")
+  val dfMentionUpdated = dfMention.select("GLOBALEVENTID", "EventTimeDate", "MentionTimeDate", "MentionDocTone")
     .withColumn("EventDate", dateTimeToDate(col("EventTimeDate")))
     .withColumn("MentionDate", dateTimeToDate(col("MentionTimeDate")))
 
   // On récupère les mentions dont la date est différente de celle de l'évenement (elles sont déjà dans cassandra)
   val dfMentionAlreadyInDb = dfMentionUpdated.filter(col("EventDate") =!= col("MentionDate") )
-  val dfMentionAlreadyInDb4 = dfMentionUpdated4.filter(col("EventDate") =!= col("MentionDate") )
+
   //Pour tester lorsqu'un event des jours passés survient: (penser à le supprimer dans cassnadra avant):
   //val dfMentionAlreadyInDb = dfMentionUpdated.filter(col("GLOBALEVENTID") === 890019084 )
 
@@ -251,31 +250,20 @@ spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra 
   //val dfMentionFiltered = dfMention.filter(col("EventDate") === col("MentionDate") )
   val numMentions = dfMentionUpdated
     .filter(col("EventDate") === col("MentionDate") )
-    .select("GLOBALEVENTID")
+    .select("GLOBALEVENTID", "MentionDocTone")
     .groupBy("GLOBALEVENTID")
-    .count()
+    .agg(sum("MentionDocTone"), count("GLOBALEVENTID"))
 
- // keep only average Tone from GKG Tone field
+  numMentions.show()
 
+  val requete2 = dfEvent.join(numMentions, Seq("GLOBALEVENTID")).select("GLOBALEVENTID", "SQLDATE","ActionGeo_CountryCode","Year","MonthYear", "count(GLOBALEVENTID)", "Actor1Geo_CountryCode", "Actor2Geo_CountryCode", "sum(MentionDocTone)", "Actor1Geo_Lat", "Actor2Geo_Lat", "Actor1Geo_Long", "Actor2Geo_Long", "MentionDocTone")
+    .withColumn("ActionGeo_CountryCode", when($"ActionGeo_CountryCode"==="", "unknown")
+      .otherwise($"ActionGeo_CountryCode")
+    )
 
-  val joinRequete2et4 = dfEvent.join(numMentions, Seq("GLOBALEVENTID")).select("GLOBALEVENTID", "SQLDATE","ActionGeo_CountryCode","Year","MonthYear", "count",
-                          "Actor1Geo_CountryCode", "Actor2Geo_CountryCode", "Actor1Geo_FullName", "Actor2Geo_FullName", "Actor1Geo_Lat", "Actor1Geo_Long", "Actor2Geo_Lat", "Actor2Geo_Long" )
-    .filter(!($"ActionGeo_CountryCode" === ""))
-    .filter(!($"Actor1Geo_CountryCode" === ""))
-    .filter(!($"Actor2Geo_CountryCode" === ""))
-
-   /* .withColumn("Actor1Geo_Lat", when($"Actor1Geo_Lat"==="", "unknown").otherwise($"Actor1Geo_Lat"))
-    .withColumn("Actor1Geo_Long", when($"Actor1Geo_Long"==="", "unknown").otherwise($"Actor1Geo_Long"))
-    .withColumn("Actor1Geo_FullName", when($"Actor1Geo_FullName"==="", "unknown").otherwise($"Actor1Geo_FullName"))
-    .withColumn("Actor2Geo_Lat", when($"Actor2Geo_Lat"==="", "unknown").otherwise($"Actor2Geo_Lat"))
-    .withColumn("Actor2Geo_Long", when($"Actor2Geo_Long"==="", "unknown").otherwise($"Actor2Geo_Long"))
-    .withColumn("Actor2Geo_FullName", when($"Actor2Geo_FullName"==="", "unknown").otherwise($"Actor2Geo_FullName"))*/
   // event mentionned on several dates : id = 871834248
 
-  val countriesRelations = joinRequete2et4.
-
-
-  val joinRequete2et4Renamed = joinRequete2et4.withColumnRenamed("SQLDATE","day")
+  val requete2Renamed = requete2.withColumnRenamed("SQLDATE","day")
     .withColumnRenamed("ActionGeo_CountryCode","country")
     .withColumnRenamed("GLOBALEVENTID","eventid")
     .withColumnRenamed("Year","year")
@@ -286,13 +274,12 @@ spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra 
     .withColumnRenamed("Actor2Geo_Lat","actor2lat")
     .withColumnRenamed("Actor1Geo_Long","actor1long")
     .withColumnRenamed("Actor2Geo_Long","actor2long")
-    .withColumnRenamed("Actor1Geo_FullName","actor1fullgeoname")
-    .withColumnRenamed("Actor2Geo_FullName","actor2fullgeoname")
+    .withColumnRenamed("MentionDocTone","mentiondoctone")
+    .withColumnRenamed("sum(MentionDocTone)","sumtone")
+    .withColumnRenamed("count(GLOBALEVENTID)","count")
 
-
-  val requete2ToSave = joinRequete2et4Renamed.select("eventid", "country", "year","monthyear", "day", "count")
-  val req4ToSave = joinRequete2et4Renamed.select("eventid", "actor1countrycode", "actor2countrycode", "year","monthyear", "day")
-  val request2Mapping = joinRequete2et4Renamed.select("eventid", "country", "day", "actor1countrycode", "actor2countrycode")
+  val requete2ToSave = requete2Renamed.select("eventid", "country", "year","monthyear", "day", "count")
+  val request2Mapping = requete2Renamed.select("eventid", "country", "day", "actor1countrycode", "actor2countrycode", "actor1lat", "actor2lat", "actor1long", "actor2long","sumtone", "count" )
 
 
   spark.setCassandraConf("Test", CassandraConnectorConf.ConnectionHostParam.option("127.0.0.1"))
@@ -313,29 +300,33 @@ spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra 
 if(dfMentionAlreadyInDb.count() !=0) {
 
   // On fait l'aggrégation du nombre de mentions
-  val dfMentionAlreadyInDbAgg = dfMentionAlreadyInDb.select("GLOBALEVENTID", "EventDate")
+  val dfMentionAlreadyInDbAgg = dfMentionAlreadyInDb.select("GLOBALEVENTID", "EventDate", "MentionDocTone")
     .groupBy("GLOBALEVENTID", "EventDate")
-    .count()
+    .agg(sum("MentionDocTone"), count("GLOBALEVENTID"))
+    .withColumnRenamed("sum(MentionDocTone)","sumtoneNew")
+    .withColumnRenamed("count(GLOBALEVENTID)","countNew")
 
   // udf qui permet de requeter la table requete2mapping afin d'avoir le pays et la date de l'event à partir de son id
   def getFields(eventid: String):Array[String]= {
     val getCountryDayTable = spark.sparkContext.cassandraTable("nosql", "requete2mapping")
-      .select("country", "day")
+      .select("country", "day", "count", "sumtone", "actor1countrycode", "actor2countrycode", "actor1lat", "actor2lat", "actor1long", "actor2long")
       .where("eventid='" + eventid + "'")
     if (getCountryDayTable.count() == 0) {
       println("Error, requete2mapping does not contain eventid: " +eventid)
-      Array("", "")
+      Array("", "", "", "")
     }else{
       val country = getCountryDayTable.first().getString("country")
       val day = getCountryDayTable.first().getString("day")
-      Array(country, day)
+      val count = getCountryDayTable.first().getString("count")
+      val sumtone = getCountryDayTable.first().getString("sumtone")
+      Array(country, day, count, sumtone)
     }
 
   }
   val getFieldsCol = udf(getFields _)
 
   // udf qui permet d'aller chercher le nombre de mention dans la table requête 2
-  def getCount(country: String, year:Int, monthyear:Int, day:Int, count: Int, eventid:String): Int= {
+  /*def getCount(country: String, year:Int, monthyear:Int, day:Int, count: Int, eventid:String): Int= {
     val getCountTable = spark.sparkContext.cassandraTable("nosql", "requete2")
       .select("count")
       .where("country='" + country + "'")
@@ -351,7 +342,7 @@ if(dfMentionAlreadyInDb.count() !=0) {
       getCountTable.first().getInt("count") + count
     }
   }
-  val getCountCol = udf(getCount _)
+   */
 
   // udf pour déterminer year et monthyear à partir de la date de la mention
  def toMonthYear(date: String, size: Int) = {
@@ -363,24 +354,43 @@ if(dfMentionAlreadyInDb.count() !=0) {
 
 
  val dfMentionAlreadyInDbUpdated = dfMentionAlreadyInDbAgg.withColumn("newCol", getFieldsCol(col("GLOBALEVENTID")))
-   .select($"GLOBALEVENTID",$"count", $"newCol"(0).as("country"), $"newCol"(1).as("day"))
+   .select($"GLOBALEVENTID",$"countNew", $"newCol"(0).as("country"), $"newCol"(1).as("day"),
+     $"newCol"(2).as("countOr").cast(IntegerType), $"newCol"(3).as("sumtoneOr").cast(IntegerType),
+     $"newCol"(4).as("actor1countrycode"), $"newCol"(5).as("actor2countrycode"),
+     $"newCol"(6).as("actor1lat"), $"newCol"(7).as("actor2lat"),
+     $"newCol"(8).as("actor1long"), $"newCol"(9).as("actor2long"),
+     $"sumtoneNew"
+   )
    .filter(col("country").isNotNull)
    .withColumn("monthyear", date(col("day"), lit(6)))
    .withColumn("year", date(col("day"), lit(4)))
    .withColumnRenamed("GLOBALEVENTID", "eventid")
-   .withColumn("count", getCountCol(
-     col("country"), col("year"), col("monthyear"),col("day"), col("count"), col("eventid"))
-   )
-  //dfMentionAlreadyInDbUpdated.show()
+   .withColumn("count",$"countOr" + $"countNew")
+   .withColumn("sumtone",$"sumtoneOr" + $"sumtoneNew")
+   .drop("sumtoneOr").drop("sumtoneNew").drop("countOr").drop("countNew")
+
+  dfMentionAlreadyInDbUpdated.show()
+
 
   //val startTimeMillis = System.currentTimeMillis()
 
   if (dfMentionAlreadyInDbUpdated.count() != 0) {
-    dfMentionAlreadyInDbUpdated.write
+    val dfMentionAlreadyInDbUpdatedRequest2 = dfMentionAlreadyInDbUpdated.select("country","monthyear", "year", "eventid","count", "day" )
+
+    dfMentionAlreadyInDbUpdatedRequest2.write
       .cassandraFormat("requete2", "nosql", "test")
       .mode(SaveMode.Append)
       .option("confirm.truncate", "true")
       .save()
+
+    val dfMentionAlreadyInDbUpdatedMapping = dfMentionAlreadyInDbUpdated.drop("monthyear", "year")
+
+    dfMentionAlreadyInDbUpdatedMapping.write
+      .cassandraFormat("requete2mapping", "nosql", "test")
+      .mode(SaveMode.Append)
+      .option("confirm.truncate", "true")
+      .save()
+
   }
   //val endTimeMillis = System.currentTimeMillis()
   //val durationSeconds = (endTimeMillis - startTimeMillis) / 1000

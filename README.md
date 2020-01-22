@@ -84,7 +84,7 @@ En attendant:
 
 create table requete2(year int, monthyear int, day int, country text, count int, eventid text, PRIMARY KEY((country), year, monthyear, day, eventid)) WITH CLUSTERING ORDER BY (year desc, monthyear asc, day asc, eventid desc);
 
-create table requete2mapping(eventid text, day int, country text, actor1countrycode text, actor2countrycode text, PRIMARY KEY(eventid));  
+create table requete2mapping(eventid text, day int, country text, count int, sumtone int, actor1countrycode text, actor2countrycode text, actor1lat text, actor2lat text, actor1long text, actor2long text, PRIMARY KEY(eventid));  
 
 Permet de faire les requetes avec count par jour en ordre descendant, mois et année (select sum(count) from requete2 where country="FR" group by eventid, year, monthYear ) mais l'ordre de la somme n'est pas pris en compte!
 ==> Plusieurs requetes?
