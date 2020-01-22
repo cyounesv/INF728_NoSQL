@@ -352,7 +352,7 @@ object EventMentionETL extends App {
 
     val getCountryDayTable = spark.sqlContext.read.format("org.apache.spark.sql.cassandra")
       .options(Map( "table" -> "requete2mapping", "keyspace" -> "nosql" , "cluster" -> "test"))
-      .load
+      .load 
 
     val dfMentionAlreadyInDbUpdated = getCountryDayTable
         .filter(col("country").isNotNull)
