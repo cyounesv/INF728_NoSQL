@@ -47,7 +47,10 @@ ccm node1 cqlsh
 
 ## A revoir: un seul keyspace pour les 4 ou 4 keyspace? Strategy? 
 
+## A revoir: un seul keyspace pour les 4 ou 4 keyspace? Strategy? 
+
 Un seul keyspace.
+
 
 * CREATE KEYSPACE NoSQL WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
 * use nosql ;
@@ -56,13 +59,7 @@ Un seul keyspace.
 A voir si on ne met pas le pays comme partition pour avoir quelquechose de plus présentable
 On ne peut pas trier les resultats sur le count si count n'est pas dans les champs du clustering. A voir, surtout pour la requete 2
 
-CREATE TABLE requete1 (
-         ... jour DATE, 
-         ... pays text,
-         ... langue text,
-         ... count int,
-         ... PRIMARY KEY ((jour), pays, langue))
-         ... ;
+CREATE TABLE requete1 (jour DATE, pays text, langue text, count int, PRIMARY KEY ((jour), pays, langue));
 
 Une fois tout cela en place, sortez de cqlsh et lancer:
 
@@ -82,14 +79,32 @@ Plusieurs points à revoir dans la requete 2:
 
 En attendant:
 
+
 create table requete2(year int, monthyear int, day int, country text, count int, eventid text, PRIMARY KEY((country), year, monthyear, day, eventid)) WITH CLUSTERING ORDER BY (year desc, monthyear asc, day asc, eventid desc);
 
 create table requete2mapping(eventid text, day int, country text, count int, sumtone int, actor1countrycode text, actor2countrycode text, actor1lat text, actor2lat text, actor1long text, actor2long text, PRIMARY KEY(eventid));  
+
 
 Permet de faire les requetes avec count par jour en ordre descendant, mois et année (select sum(count) from requete2 where country="FR" group by eventid, year, monthYear ) mais l'ordre de la somme n'est pas pris en compte!
 ==> Plusieurs requetes?
 
 ### Dispo dans la branche requete2
 
+Creation des tables:
+create table requete2(year int, monthyear int, day int, country text, count int, eventid text, PRIMARY KEY((country), year, monthyear, day, eventid)) WITH CLUSTERING ORDER BY (year desc, monthyear asc, day asc, eventid desc);
+
+create table requete2mapping(eventid text, day int, country text, count int, sumtone int, actor1countrycode text, actor2countrycode text, actor1lat text, actor2lat text, actor1long text, actor2long text, PRIMARY KEY(eventid));  
+
+
+## Requete 3, dispo dans le master
+ Creations de trois tables distinctes : une pour les themes, une pour les Personnes et la derniere pour les Lieux (nous avons retenu les pays).
+ 
+ Cle de partition : La source, c'est sur elle que nous allons requeter, et elle permet intuitivement un bon partitionnement.
+ Cle de clustering : year, month, day qui permettra les aggregations demandees.
+ 
+ Creations des tables:
+- CREATE TABLE req31(year int, month int, day int, source text,count int, theme text, tone double, PRIMARY KEY((source),year, month, day, count)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc, count desc);
+- CREATE TABLE req32(year int, month int, day int, source text,count int, person text, tone double, PRIMARY KEY((source),year, month, day, count)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc, count desc);
+- CREATE TABLE req33(year int, month int, day int, source text,count int, location text, tone double, PRIMARY KEY((source),year, month, day, count)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc, count desc);
 
 
