@@ -8,6 +8,7 @@ import com.datastax.spark.connector.SomeColumns
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.Row
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.log4j.Level
@@ -50,8 +51,6 @@ object EventMentionETL extends App {
 
   /**
    * Je suppose le chargement dans le repertoire /tmp
-   *
-   *
    */
 
   // D.E Evenement
@@ -226,9 +225,7 @@ spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra 
   .save()
 */
   // Requete 2
-
   // On collecte les infos de la table mention
-
 
   dfMention.printSchema()
   def toDate(date: java.math.BigDecimal) ={
@@ -240,9 +237,13 @@ spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra 
     .withColumn("EventDate", dateTimeToDate(col("EventTimeDate")))
     .withColumn("MentionDate", dateTimeToDate(col("MentionTimeDate")))
 
+  val dfMentionUpdated4 = dfMention.select("GLOBALEVENTID", "EventTimeDate", "MentionTimeDate", "MentionDocTone")
+    .withColumn("EventDate", dateTimeToDate(col("EventTimeDate")))
+    .withColumn("MentionDate", dateTimeToDate(col("MentionTimeDate")))
+
   // On récupère les mentions dont la date est différente de celle de l'évenement (elles sont déjà dans cassandra)
   val dfMentionAlreadyInDb = dfMentionUpdated.filter(col("EventDate") =!= col("MentionDate") )
-
+  val dfMentionAlreadyInDb4 = dfMentionUpdated4.filter(col("EventDate") =!= col("MentionDate") )
   //Pour tester lorsqu'un event des jours passés survient: (penser à le supprimer dans cassnadra avant):
   //val dfMentionAlreadyInDb = dfMentionUpdated.filter(col("GLOBALEVENTID") === 890019084 )
 
@@ -254,24 +255,44 @@ spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra 
     .groupBy("GLOBALEVENTID")
     .count()
 
-  val requete2 = dfEvent.join(numMentions, Seq("GLOBALEVENTID")).select("GLOBALEVENTID", "SQLDATE","ActionGeo_CountryCode","Year","MonthYear", "count", "Actor1Geo_CountryCode", "Actor2Geo_CountryCode")
-    .withColumn("ActionGeo_CountryCode", when($"ActionGeo_CountryCode"==="", "unknown")
-      .otherwise($"ActionGeo_CountryCode")
-    )
+ // keep only average Tone from GKG Tone field
 
+
+  val joinRequete2et4 = dfEvent.join(numMentions, Seq("GLOBALEVENTID")).select("GLOBALEVENTID", "SQLDATE","ActionGeo_CountryCode","Year","MonthYear", "count",
+                          "Actor1Geo_CountryCode", "Actor2Geo_CountryCode", "Actor1Geo_FullName", "Actor2Geo_FullName", "Actor1Geo_Lat", "Actor1Geo_Long", "Actor2Geo_Lat", "Actor2Geo_Long" )
+    .filter(!($"ActionGeo_CountryCode" === ""))
+    .filter(!($"Actor1Geo_CountryCode" === ""))
+    .filter(!($"Actor2Geo_CountryCode" === ""))
+
+   /* .withColumn("Actor1Geo_Lat", when($"Actor1Geo_Lat"==="", "unknown").otherwise($"Actor1Geo_Lat"))
+    .withColumn("Actor1Geo_Long", when($"Actor1Geo_Long"==="", "unknown").otherwise($"Actor1Geo_Long"))
+    .withColumn("Actor1Geo_FullName", when($"Actor1Geo_FullName"==="", "unknown").otherwise($"Actor1Geo_FullName"))
+    .withColumn("Actor2Geo_Lat", when($"Actor2Geo_Lat"==="", "unknown").otherwise($"Actor2Geo_Lat"))
+    .withColumn("Actor2Geo_Long", when($"Actor2Geo_Long"==="", "unknown").otherwise($"Actor2Geo_Long"))
+    .withColumn("Actor2Geo_FullName", when($"Actor2Geo_FullName"==="", "unknown").otherwise($"Actor2Geo_FullName"))*/
   // event mentionned on several dates : id = 871834248
 
-  val requete2Renamed = requete2.withColumnRenamed("SQLDATE","day")
+  val countriesRelations = joinRequete2et4.
+
+
+  val joinRequete2et4Renamed = joinRequete2et4.withColumnRenamed("SQLDATE","day")
     .withColumnRenamed("ActionGeo_CountryCode","country")
     .withColumnRenamed("GLOBALEVENTID","eventid")
     .withColumnRenamed("Year","year")
     .withColumnRenamed("MonthYear","monthyear")
     .withColumnRenamed("Actor1Geo_CountryCode","actor1countrycode")
     .withColumnRenamed("Actor2Geo_CountryCode","actor2countrycode")
+    .withColumnRenamed("Actor1Geo_Lat","actor1lat")
+    .withColumnRenamed("Actor2Geo_Lat","actor2lat")
+    .withColumnRenamed("Actor1Geo_Long","actor1long")
+    .withColumnRenamed("Actor2Geo_Long","actor2long")
+    .withColumnRenamed("Actor1Geo_FullName","actor1fullgeoname")
+    .withColumnRenamed("Actor2Geo_FullName","actor2fullgeoname")
 
 
-  val requete2ToSave = requete2Renamed.select("eventid", "country", "year","monthyear", "day", "count")
-  val request2Mapping = requete2Renamed.select("eventid", "country", "day", "actor1countrycode", "actor2countrycode")
+  val requete2ToSave = joinRequete2et4Renamed.select("eventid", "country", "year","monthyear", "day", "count")
+  val req4ToSave = joinRequete2et4Renamed.select("eventid", "actor1countrycode", "actor2countrycode", "year","monthyear", "day")
+  val request2Mapping = joinRequete2et4Renamed.select("eventid", "country", "day", "actor1countrycode", "actor2countrycode")
 
 
   spark.setCassandraConf("Test", CassandraConnectorConf.ConnectionHostParam.option("127.0.0.1"))
