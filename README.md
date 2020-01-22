@@ -90,6 +90,12 @@ Permet de faire les requetes avec count par jour en ordre descendant, mois et an
 
 ### Dispo dans la branche requete2
 
+Creation des tables:
+create table requete2(year int, monthyear int, day int, country text, count int, eventid text, PRIMARY KEY((country), year, monthyear, day, eventid)) WITH CLUSTERING ORDER BY (year desc, monthyear asc, day asc, eventid desc);
+
+create table requete2mapping(eventid text, day int, country text, count int, sumtone int, actor1countrycode text, actor2countrycode text, actor1lat text, actor2lat text, actor1long text, actor2long text, PRIMARY KEY(eventid));  
+
+
 ## Requete 3, dispo dans le master
  Creations de trois tables distinctes : une pour les themes, une pour les Personnes et la derniere pour les Lieux (nous avons retenu les pays).
  
