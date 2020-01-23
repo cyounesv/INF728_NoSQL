@@ -174,7 +174,7 @@ object EventMentionETL extends App {
     return dates.toList
   }
 
-  alldaysIn2019().foreach { load(_) }
+  alldaysIn2019().slice(118, 365).foreach { load(_) }
 
   def load(date: String) = {
 
@@ -211,7 +211,7 @@ object EventMentionETL extends App {
         toDouble(e(41)), e(42), toInt(e(43)), e(44), e(45), e(46), e(47), toDouble(e(48)), toDouble(e(49)), e(50), toInt(e(51)), e(52), e(53), e(54), e(55), toDouble(e(56)), toDouble(e(57)), e(58), toBigInt(e(59)), e(60), toMonth(e(1)), toDay(e(1)))).toDF.cache
 
     // On charge les fichiers Mention
-    // Code du prof pour faire ca
+    // Code du prof pour faire ca 
 
     val mentionsRDD = spark.sparkContext.binaryFiles("s3a://" + AwsS3Client.BUCKET + "/" + date + "*.mentions.CSV.zip", 100).
       flatMap { // decompresser les fichiers
