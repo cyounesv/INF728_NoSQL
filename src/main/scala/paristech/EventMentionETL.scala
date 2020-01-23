@@ -174,7 +174,7 @@ object EventMentionETL extends App {
     return dates.toList
   }
 
-  alldaysIn2019().slice(0, 3).foreach { load(_) }
+  alldaysIn2019().foreach { load(_) }
 
   def load(date: String) = {
 
@@ -390,7 +390,11 @@ object EventMentionETL extends App {
       //val endTimeMillis = System.currentTimeMillis()
       //val durationSeconds = (endTimeMillis - startTimeMillis) / 1000
       //println(durationSeconds)
+  
     }
+for ((k,v) <- spark.sparkContext.getPersistentRDDs) {
+  v.unpersist()
+}
   }
 
   println("end")
