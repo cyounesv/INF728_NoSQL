@@ -4,9 +4,7 @@ import java.util.zip.ZipInputStream
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
-import com.datastax.spark.connector.SomeColumns
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
+
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.Row
 import org.apache.spark.SparkConf
@@ -120,7 +118,7 @@ object EventMentionETL extends App {
   // On charge les fichiers Events
   // Code du prof pour faire ca
 
-  val eventsRDD = spark.sparkContext.binaryFiles("/tmp/20190101/2019*.export.CSV.zip", 100).
+  val eventsRDD = spark.sparkContext.binaryFiles("/tmp/2019*.export.CSV.zip", 100).
     flatMap { // decompresser les fichiers
       case (name: String, content: PortableDataStream) =>
         val zis = new ZipInputStream(content.open)
@@ -165,7 +163,7 @@ object EventMentionETL extends App {
   // On charge les fichiers Mention
   // Code du prof pour faire ca
 
-  val mentionsRDD = spark.sparkContext.binaryFiles("/tmp/20190101/2019*.mentions.CSV.zip", 100).
+  val mentionsRDD = spark.sparkContext.binaryFiles("/tmp/2019*.mentions.CSV.zip", 100).
     flatMap { // decompresser les fichiers
       case (name: String, content: PortableDataStream) =>
         val zis = new ZipInputStream(content.open)
@@ -278,7 +276,6 @@ spark.sql(createDDL) // Creates Catalog Entry registering an existing Cassandra 
   spark.setCassandraConf("Test", CassandraConnectorConf.ConnectionHostParam.option("127.0.0.1"))
 
   // On enregistre l'aggrégation dans la table requete2 et on sauveegarde l'association eventid/pays dans la table requete2mapping
-
   requete2ToSave.write
     .cassandraFormat("requete2", "nosql", "test")
     .mode(SaveMode.Append)
