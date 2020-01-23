@@ -107,4 +107,5 @@ create table requete2mapping(eventid text, day int, country text, count int, sum
 - CREATE TABLE req32(year int, month int, day int, source text,count int, person text, tone double, PRIMARY KEY((source),year, month, day, count)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc, count desc);
 - CREATE TABLE req33(year int, month int, day int, source text,count int, location text, tone double, PRIMARY KEY((source),year, month, day, count)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc, count desc);
 
-
+## Requete 4, dispo dans requete 2_update
+create table req42(year int, monthyear int, day int, pays1 text, pays2 text, averagetone float, numberofarticles int, PRIMARY KEY ((pays1),year,monthyear,day,pays2)) WITH CLUSTERING ORDER BY (year desc, monthyear desc, day desc); 
