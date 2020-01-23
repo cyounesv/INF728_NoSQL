@@ -351,10 +351,10 @@ object EventMentionETL extends App {
         .options(Map("table" -> "requete2mapping", "keyspace" -> "nosql", "cluster" -> "test"))
         .load
 
-      val eventIds = dfMentionAlreadyInDbAgg.select($"eventid").collectAsList()
+      val eventIds = dfMentionAlreadyInDbAgg.select($"eventid").collect().map(_(0)).toList.map(_.toString)
 
       val dfMentionAlreadyInDbUpdated = getCountryDayTable
-        .where($"eventid".isin(eventIds))
+        .where($"eventid".isin(eventIds:_*))
         .join(dfMentionAlreadyInDbAgg, Seq("eventid"))
         .withColumn("monthyear", date(col("day"), lit(6)))
         .withColumn("year", date(col("day"), lit(4)))
