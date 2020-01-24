@@ -59,7 +59,7 @@ Un seul keyspace.
 A voir si on ne met pas le pays comme partition pour avoir quelquechose de plus présentable
 On ne peut pas trier les resultats sur le count si count n'est pas dans les champs du clustering. A voir, surtout pour la requete 2
 
-CREATE TABLE requete1 (jour DATE, pays text, langue text, count int, PRIMARY KEY ((jour), pays, langue));
+CREATE TABLE requete1 (jour int, pays text, langue text, count int, PRIMARY KEY ((jour), pays, langue));
 
 Une fois tout cela en place, sortez de cqlsh et lancer:
 
@@ -108,4 +108,4 @@ create table requete2mapping(eventid text, day int, country text, count int, sum
 - CREATE TABLE req33(year int, month int, day int, source text,count int, location text, tone double, PRIMARY KEY((source),year, month, day, count)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc, count desc);
 
 ## Requete 4, dispo dans requete 2_update
-create table req42(year int, monthyear int, day int, pays1 text, pays2 text, averagetone float, numberofarticles int, PRIMARY KEY ((pays1),year,monthyear,day,pays2)) WITH CLUSTERING ORDER BY (year desc, monthyear desc, day desc); 
+create table req41(year int, monthyear int, day int, pays1 text, pays2 text, averagetone float, numberofarticles int, PRIMARY KEY ((pays1),year,monthyear,day,pays2)) WITH CLUSTERING ORDER BY (year desc, monthyear desc, day desc); 

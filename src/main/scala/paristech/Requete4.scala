@@ -11,19 +11,20 @@ import org.apache.spark.SparkContext._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql._
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.{SaveMode, SparkSession}
+import org.apache.spark.sql.{ SaveMode, SparkSession }
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
 import org.apache.spark.sql.cassandra._
-import com.datastax.spark.connector.cql.{CassandraConnector, CassandraConnectorConf}
+import com.datastax.spark.connector.cql.{ CassandraConnector, CassandraConnectorConf }
 import com.datastax.spark.connector.rdd.ReadConf
 import org.apache.spark.sql.functions.udf
 import com.datastax.spark.connector._
+import main.scala.paristech.AwsS3Client
+import main.scala.paristech.CassandraObject
 
 import org.apache.spark.sql.types.IntegerType
-import paristech.EventMentionETL.spark
 
-object Requete4 extends App  {
+object Requete4 extends App {
 
   Logger.getLogger("akka").setLevel(Level.WARN)
 
@@ -37,18 +38,21 @@ object Requete4 extends App  {
     "spark.default.parallelism" -> "12",
     "spark.sql.shuffle.partitions" -> "12",
     "spark.driver.maxResultSize" -> "2g",
-    "spark.master" -> "local[*]",
-    "spark.cassandra.connection.connections_per_executor_max" -> "2"))
+    "spark.cassandra.connection.host" -> CassandraObject.IP))
 
   val spark = SparkSession
     .builder
     .config(conf)
-    .appName("TP Spark : Trainer")
+    .appName("Event And Mention ETL")
     .getOrCreate()
 
-  spark.sparkContext.setLogLevel("WARN")
+  val AWS_ID = AwsS3Client.AWS_ID
+  val AWS_KEY = AwsS3Client.AWS_KEY
+  spark.sparkContext.hadoopConfiguration.set("fs.s3a.access.key", AWS_ID) //(1) mettre votre ID du fichier credentials.csv
+  spark.sparkContext.hadoopConfiguration.set("fs.s3a.secret.key", AWS_KEY) //(2) mettre votre secret du fichier credentials.csv
+  spark.sparkContext.hadoopConfiguration.set("fs.s3a.connection.maximum", "1000") //(3) 15 par default !!!
 
-  spark.setCassandraConf("Test", CassandraConnectorConf.ConnectionHostParam.option("127.0.0.1"))
+  spark.sparkContext.setLogLevel("WARN")
 
   def toMonthYear(date: String, size: Int) = {
     //date.toString().take(size).toInt
@@ -56,10 +60,10 @@ object Requete4 extends App  {
   }
   val date = udf(toMonthYear _)
 
-  def orderCountries(country1: String, country2: String):Array[String]= {
+  def orderCountries(country1: String, country2: String): Array[String] = {
     var country3 = country1
     var country4 = country2
-    if(country2<country1){
+    if (country2 < country1) {
       country3 = country2
       country4 = country1
     }
@@ -72,17 +76,16 @@ object Requete4 extends App  {
     .options(Map("table" -> "requete2mapping", "keyspace" -> "nosql", "cluster" -> "test"))
     .load
 
-  val countriesRelations = getOutputReq2Map.filter(col("actor1countrycode")=!= "" && col("actor2countrycode")=!= "")
+  val countriesRelations = getOutputReq2Map.filter(col("actor1countrycode") =!= "" && col("actor2countrycode") =!= "")
     //.filter(col("actor2countrycode").isNotNull )
     .withColumn("countries", orderCountriesCol(col("actor1countrycode"), col("actor2countrycode")))
     .select(col("countries")(0).as("pays1"), col("countries")(1).as("pays2"), col("day"), col("count"), col("sumtone"))
-   // .select("day", "count", "sumtone")
+    // .select("day", "count", "sumtone")
     .withColumn("monthyear", date(col("day"), lit(6)))
     .withColumn("year", date(col("day"), lit(4)))
     //.select("year", "monthyear","day", "count","sumtone", "pays1", "pays2")
     .groupBy("pays1", "year", "monthyear", "day", "pays2").agg(mean("sumtone"), sum("count"))
-      .withColumnRenamed("avg(sumtone)", "averagetone").withColumnRenamed("sum(count)", "numberofarticles")
-
+    .withColumnRenamed("avg(sumtone)", "averagetone").withColumnRenamed("sum(count)", "numberofarticles")
 
   countriesRelations.show(10, false)
 
@@ -97,7 +100,7 @@ object Requete4 extends App  {
     .withColumnRenamed("pays3", "pays1")
     .withColumnRenamed("pays4", "pays2")
 
-/*val countriesAllRelations = countriesRelations.union(countriesRelationsReverses)
+  /*val countriesAllRelations = countriesRelations.union(countriesRelationsReverses)
   countriesRelationsReverses.show(10, false)
   countriesAllRelations.show(10, false)
 */
@@ -105,6 +108,5 @@ object Requete4 extends App  {
     .cassandraFormat("req41", "nosql", "test")
     .mode(SaveMode.Append)
     .save()
-
 
 }
