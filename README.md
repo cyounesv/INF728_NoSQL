@@ -30,7 +30,7 @@ Scripts pour la récuperation des données, parsing, et prépartion des données
 Notebook jupyter pour la présentation des résultats. Necessite quelques plugins (plotly, pandas...)
 
 **Repertoire Presentation:**
-Présentation éffectuée lors de la restitution
+Présentation effectuée lors de la restitution
 
 ## Organisation du projet
 Pour les taches du projet, nous avons mis en place un kanboard (https://github.com/Martinez-TAD/INF728_NoSQL/projects/1).
@@ -41,7 +41,7 @@ Editer les fichiers build.sbt et build_and_submit pour y mettre vos variables (c
 Il faut lancer le script suivant:
 ./build_and_submit.sh LoadingCSVFiles
 
-J'ai fais en sorte que le lancement se fasse en arriere plan. Si vous voulez l'avoir en premier plan, il faut retirer la commande nohup de la derniere ligne du script (on aura donc directement le spark_submit) et le '&' en fin de ligne.
+Nous avons fais en sorte que le lancement se fasse en arriere plan. Si vous voulez l'avoir en premier plan, il faut retirer la commande nohup de la derniere ligne du script (on aura donc directement le spark_submit) et le '&' en fin de ligne.
 
 
 ## Creation du cluster de test Cassandra:
@@ -99,12 +99,12 @@ create table requete2mapping(eventid text, day int, country text, count int, sum
 
 
 ### Requete 3, dispo dans le master
- Creations de trois tables distinctes : une pour les themes, une pour les Personnes et la derniere pour les Lieux (nous avons retenu les pays).
+ Creations de trois tables distinctes : une pour les themes, une pour les Personnes et la derniere pour les lieux (nous avons retenu les pays).
  
- Cle de partition : La source, c'est sur elle que nous allons requeter, et elle permet intuitivement un bon partitionnement.
- Cle de clustering : year, month, day qui permettra les aggregations demandees.
+ Clé de partition : La source, c'est sur elle que nous allons requeter, et elle permet intuitivement un bon partitionnement.
+ Clé de clustering : year, month, day qui permettra les aggrégations demandées.
  
- Creations des tables:
+ Créations des tables:
 - CREATE TABLE req31(year int, month int, day int, source text,count int, theme text, tone double, PRIMARY KEY((source),year, month, day, count)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc, count desc);
 - CREATE TABLE req32(year int, month int, day int, source text,count int, person text, tone double, PRIMARY KEY((source),year, month, day, count)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc, count desc);
 - CREATE TABLE req33(year int, month int, day int, source text,count int, location text, tone double, PRIMARY KEY((source),year, month, day, count)) WITH CLUSTERING ORDER BY (year desc, month asc, day asc, count desc);
