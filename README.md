@@ -24,7 +24,7 @@ Le but du projet est la modélisation d'un système sur **AWS** pour la modélis
 création des machines virtuelles pour la base de donnée Cassandra, paramétrisation des machines, lancement du cluster cassandra. Les tables ne sont pas créées lors de cette opération. 
 
 **Repertoire processing data:**
-Scripts pour la récuperation des données, parsing, et prépartion des données et rangement dans les tabes cassandra
+Scripts pour la récuperation des données, parsing, et prépartion des données et rangement dans les tables Cassandra
 
 **Repertoire notebooks:**
 Notebook jupyter pour la présentation des résultats. Necessite quelques plugins (plotly, pandas...)
