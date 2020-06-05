@@ -1,7 +1,7 @@
 ![Logo](header.jpg)
 
 # Projet NO-SQL INF728
-Projet de Chloe Youness, Erwan Floch, Nicolas Louis, Thomas Riviere, Vincent Martinez
+Projet de Chloe Younes, Erwan Floch, Nicolas Louis, Thomas Riviere, Vincent Martinez
 
 ## But du projet
 Le sujet du projet est disponible à l'adresse suivante: http://andreiarion.github.io/projet2019.html
